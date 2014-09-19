@@ -8,6 +8,7 @@
 
 namespace microscopes{
 namespace hmm{
+	
 
 	distributions::rng_t rng;
 
