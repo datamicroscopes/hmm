@@ -15,6 +15,8 @@ namespace hmm{
   // A class for a vector of vectors, useful for representing pretty much everything we need for the beam sampler.
   // For instance, time series data can be stored as a vector of vectors, where each vector is one time series.
   // The transition matrix can also be stored as a vector of vectors, where each transition probability is one vector.
+
+  // Though I realize now, once I am adding-and-removing states, it might make sense to replace this with group_manager.
   template <typename T>
   class meta_vector {
   public:
@@ -66,6 +68,7 @@ namespace hmm{
     // parameters
     const meta_vector<size_t> data_; // XXX: For now, the observation type is just a vector of vectors of ints. Later we can switch over to using recarrays
     meta_vector<size_t> s_; // the state sequence
+    meta_vector<size_t> counts_; // the count of how many times a transition occurs between states
     meta_vector<float> u_; // the slice sampling parameter for each time step in the series
     meta_vector<float> pi_; // the observed portion of the infinite transition matrix
     std::vector<float> beta_; // the stick lengths for the top-level DP draw
@@ -94,7 +97,21 @@ namespace hmm{
       }
     }
 
-    void sample_pi() {}
+    void sample_pi() {
+      std::vector<size_t> sizes = u_.size();
+      for (int i = 0; i < sizes.size(); i++) {
+        float new_pi[sizes[i]+1];
+        float alphas[sizes[i]+1];
+        for (int j = 0; j < sizes[i]; j++) {
+          alphas[j] = counts_[i][j] + alpha0_ * beta_[j];
+        }
+        alphas[sizes[i]] = alpha0_ * beta_[sizes[i]];
+        distributions::sample_dirichlet(rng, sizes[i]+1, alphas, new_pi);
+        for (int j = 0; j < sizes[i]; j++) {
+          pi_[i][j] = new_pi[i];
+        }
+      }
+    }
 
     void sample_beta() {}
   };
