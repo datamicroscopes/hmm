@@ -1,18 +1,3 @@
-Skip to content
- This repository
-Explore
-Gist
-Blog
-Help
-David Pfau dpfau
- 
-3  Unwatch 
-  Star 0
- Fork 0datamicroscopes/hmm
- branch: master  hmm / include / microscopes / hmm / model.hpp
-David Pfaudpfau 10 minutes ago Changed indent from tab to two spaces
-1 contributor
-103 lines (84 sloc)  2.908 kb RawBlameHistory   
 #pragma once
 
 #include <distributions/special.hpp>
@@ -116,4 +101,3 @@ namespace hmm{
 
 } // namespace hmm
 } // namespace microscopes
-Status API Training Shop Blog About © 2014 GitHub, Inc. Terms Privacy Security Contact 
