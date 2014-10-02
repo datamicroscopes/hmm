@@ -5,6 +5,7 @@
 #include <distributions/random_fwd.hpp>
 
 #include <vector>
+#include <map>
 
 namespace microscopes{
 namespace hmm{
@@ -61,22 +62,35 @@ namespace hmm{
       alpha0_(alpha0),
       H_(H),
       data_(data),
-      u_(data.size())
-    {}
+      u_(data.size()),
+      beta_(),
+      memoized_log_stirling_()
+    {
+    }
   protected:
     
     // parameters
+
+    // these three all have the same shape as the data
     const meta_vector<size_t> data_; // XXX: For now, the observation type is just a vector of vectors of ints. Later we can switch over to using recarrays
     meta_vector<size_t> s_; // the state sequence
-    meta_vector<size_t> counts_; // the count of how many times a transition occurs between states
     meta_vector<float> u_; // the slice sampling parameter for each time step in the series
+
+    // these three all have the same shape as the transition matrix
+    meta_vector<size_t> m_; // auxilliary variable necessary for sampling beta
+    meta_vector<size_t> counts_; // the count of how many times a transition occurs between states
     meta_vector<float> pi_; // the observed portion of the infinite transition matrix
+
+    // shape is the number of states currently instantiated
     std::vector<float> beta_; // the stick lengths for the top-level DP draw
 
     // hyperparameters
     const float gamma_;
     const float alpha0_;
     const float H_[N]; // hyperparameters for a Dirichlet prior over observations. Will generalize this to other observation models later.
+
+    // helper fields
+    std::map<size_t, std::vector<float> > memoized_log_stirling_; // memoize computation of log stirling numbers for speed when sampling m
 
     // sampling functions. later we can integrate these into microscopes::kernels where appropriate.
     void sample_s() {}
@@ -113,7 +127,40 @@ namespace hmm{
       }
     }
 
-    void sample_beta() {}
+    void sample_m() {
+      std::vector<size_t> sizes = counts_.size();
+      for (int i = 0; i < sizes.size(); i++) {
+        for (int j = 0; j < sizes[i]; j++) {
+          size_t n_ij = counts_[i][j];
+          if (!memoized_log_stirling_.count(n_ij)) {
+            memoized_log_stirling_[n_ij] = distributions::log_stirling1_row(n_ij);
+          }
+
+          std::vector<float> stirling_row = memoized_log_stirling_[n_ij];
+
+          // there's gotta be a helper function somewhere in distributions that samples from discrete log probabilities efficiently
+          std::vector<float> scores(n_ij);
+          for (int m = 0; m < n_ij; m++) {
+            scores[m] = stirling_row[m+1] + (m+1) * ( log( alpha0_ ) + log( beta_[j] ) );
+          }
+          m_[i][j] = distributions::sample_from_scores_overwrite(rng, scores) + 1;
+        }
+      }
+    }
+
+    void sample_beta() {
+      size_t K = m_.size().size();
+      float alphas[K+1];
+      float new_beta[K+1];
+      for (int k = 0; k < K; k++) {
+        alphas[k] = m_.sum(k);
+      }
+      alphas[K] = gamma_;
+      distributions::sample_dirichlet(rng, K+1, alphas, new_beta);
+      for (int k = 0; k <= K; k++) {
+        beta_[k] = new_beta[k];
+      }
+    }
   };
 
 } // namespace hmm
