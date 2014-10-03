@@ -159,11 +159,14 @@ namespace hmm{
         beta_.push_back(bu * (1-bk));
 
         // Add new transition to each state
+        max_pi = 0.0;
         for (int i = 0; i < K+1; i++) {
           float pu = pi_[i][K];
           float pk = distributions::sample_beta(rng, alpha0_ * beta_[K], alpha0_ * beta_[K+1]);
           pi_[i][K] = pu * pk;
           pi_[i].push_back(pu * (1-pk));
+          max_pi = max_pi > pi_[i][K]   ? max_pi : pi_[i][K];
+          max_pi = max_pi > pi_[i][K+1] ? max_pi : pi_[i][K+1];
         }
 
         // check that sizes are all consistent
