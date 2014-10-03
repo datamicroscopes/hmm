@@ -64,7 +64,8 @@ namespace hmm{
       data_(data),
       u_(data.size()),
       beta_(),
-      memoized_log_stirling_()
+      memoized_log_stirling_(),
+      states_()
     {
     }
   protected:
@@ -91,10 +92,12 @@ namespace hmm{
 
     // helper fields
     std::map<size_t, std::vector<float> > memoized_log_stirling_; // memoize computation of log stirling numbers for speed when sampling m
+    std::set<size_t> states_;
 
     // sampling functions. later we can integrate these into microscopes::kernels where appropriate.
     void sample_s() {
       std::vector<size_t> sizes = data_.size();
+      counts_();
       for (int i = 0; i < sizes.size(); i++) {
         // Forward-filter
         for (int t = 0; t < size[i]; t++) {
@@ -103,7 +106,7 @@ namespace hmm{
 
         // Backwards-sample
         for (int t = size[i]-1; t >= 0; t--) {
-          
+
         }
       }
     }
