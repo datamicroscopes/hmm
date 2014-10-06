@@ -75,8 +75,9 @@ namespace hmm{
       data_(data),
       u_(data.size()),
       m_(1,1),
-      counts_(1,1),
+      pi_counts_(1,1),
       pi_(1,2),
+      phi_counts_(1,N),
       phi_(1,N),
       beta_(2),
       memoized_log_stirling_(),
@@ -101,9 +102,10 @@ namespace hmm{
     meta_vector<float> u_; // the slice sampling parameter for each time step in the series
 
     // these three all have the same shape as the transition matrix, approximately
-    meta_vector<size_t> counts_; // the count of how many times a transition occurs between states. Size K x K.
+    meta_vector<size_t> pi_counts_; // the count of how many times a transition occurs between states. Size K x K.
     meta_vector<float> pi_; // the observed portion of the infinite transition matrix. Size K x K+1.
 
+    meta_vector<size_t> phi_counts_; // count of how many times an observation is seen from a given state. Size K x N.
     meta_vector<float> phi_; // the emission matrix. Size K x N.
 
     // shape is the number of states currently instantiated
@@ -124,7 +126,8 @@ namespace hmm{
     // sampling functions. later we can integrate these into microscopes::kernels where appropriate.
     void sample_s() {
       std::vector<size_t> sizes = data_.size();
-      counts_ = meta_vector<size_t>(pi_.size().size()); // clear counts
+      pi_counts_ = meta_vector<size_t>(K,K); // clear counts
+      phi_counts_ = meta_vector<size_t>(K,N);
       for (int i = 0; i < sizes.size(); i++) {
         // Forward-filter
         meta_vector<float> probs = meta_vector<float>(sizes[i]);
@@ -153,6 +156,7 @@ namespace hmm{
 
         // Backwards-sample
         s_[i][sizes[i]-1] = distributions::sample_from_likelihoods(rng, probs[sizes[i]-1]);
+        phi_counts_[s_[i][sizes[i]-1]][data_[i][sizes[i]-1]]++;
         for (int t = sizes[i]-1; t > 0; t--) {
           for (int k = 0; k < K; k++) {
             if (u_[i][t] >= pi_[k][s_[i][t]]) {
@@ -161,8 +165,10 @@ namespace hmm{
           }
           s_[i][t-1] = distributions::sample_from_likelihoods(rng, probs[t-1]);
           // Update counts
-
+          pi_counts_[s_[i][t-1]][s_[i][t]]++;
+          phi_counts_[s_[i][t-1]][data_[i][t-1]]++;
         }
+        counts[0][s_[i][0]]++; // Also add count for state 0, which is the initial state
       }
     }
 
@@ -220,7 +226,7 @@ namespace hmm{
         float new_pi[K+1];
         float alphas[K+1];
         for (int k = 0; k < K; k++) {
-          alphas[k] = counts_[i][k] + alpha0_ * beta_[k];
+          alphas[k] = pi_counts_[i][k] + alpha0_ * beta_[k];
         }
         alphas[K] = alpha0_ * beta_[K];
         distributions::sample_dirichlet(rng, K+1, alphas, new_pi);
@@ -239,7 +245,7 @@ namespace hmm{
       meta_vector<size_t> m_(K, K);
       for (int i = 0; i < K; i++) {
         for (int j = 0; j < K; j++) {
-          size_t n_ij = counts_[i][j];
+          size_t n_ij = pi_counts_[i][j];
           if (!memoized_log_stirling_.count(n_ij)) {
             memoized_log_stirling_[n_ij] = distributions::log_stirling1_row(n_ij);
           }
