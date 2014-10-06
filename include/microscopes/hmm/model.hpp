@@ -45,6 +45,10 @@ namespace hmm{
       data_.push_back(vec);
     }
 
+    void erase(int i) {
+      erase(data_.begin()+i);
+    }
+
     std::vector<size_t> size() {
       std::vector<size_t> sizes(data_.size());
       for (std::vector<T> vec: data_) {
@@ -78,18 +82,31 @@ namespace hmm{
       pi_(1,2),
       phi_counts_(1,N),
       phi_(1,N),
+      state_visited_(1),
       beta_(2),
       memoized_log_stirling_(),
       K(1)
     {
+      beta_[0] = 0.5;
+      beta_[1] = 0.5; // simple initialization
+      state_visited_[0] = true;
+      for (int i = 0; i < data.size().size(); i++) {
+        for (int j = 0; j < data[i].size(); j++) {
+          pi_counts_[0][0]++;
+          phi_counts_[0][data[i][j]]++;
+        }
+      }
+      sample_pi();
+      sample_phi();
     }
 
     void sample_beam() {
-      sample_u(); // only time K increases
-      sample_s(); // 
+      sample_u();
+      sample_s();
+      clear_empty_states();
+      sample_beta();
       sample_pi();
       sample_phi();
-      sample_beta();
     }
   protected:
     
@@ -107,8 +124,9 @@ namespace hmm{
     meta_vector<size_t> phi_counts_; // count of how many times an observation is seen from a given state. Size K x N.
     meta_vector<float> phi_; // the emission matrix. Size K x N.
 
-    // shape is the number of states currently instantiated
+    // shape is the number of states currently instantiated, roughtly
     std::vector<float> beta_; // the stick lengths for the top-level DP draw. Size K+1.
+    std::vector<bool> state_visited_;
 
     // hyperparameters
     const float gamma_;
@@ -127,6 +145,7 @@ namespace hmm{
       std::vector<size_t> sizes = data_.size();
       pi_counts_ = meta_vector<size_t>(K,K); // clear counts
       phi_counts_ = meta_vector<size_t>(K,N);
+      state_visited_ = std::vector<bool>(K);
       for (int i = 0; i < sizes.size(); i++) {
         // Forward-filter
         meta_vector<float> probs = meta_vector<float>(sizes[i]);
@@ -155,6 +174,7 @@ namespace hmm{
 
         // Backwards-sample
         s_[i][sizes[i]-1] = distributions::sample_from_likelihoods(rng, probs[sizes[i]-1]);
+        state_visited_[s_[i][sizes[i]-1]] = true;
         phi_counts_[s_[i][sizes[i]-1]][data_[i][sizes[i]-1]]++;
         for (int t = sizes[i]-1; t > 0; t--) {
           for (int k = 0; k < K; k++) {
@@ -164,6 +184,7 @@ namespace hmm{
           }
           s_[i][t-1] = distributions::sample_from_likelihoods(rng, probs[t-1]);
           // Update counts
+          state_visited_[s_[i][t-1]] = true;
           pi_counts_[s_[i][t-1]][s_[i][t]]++;
           phi_counts_[s_[i][t-1]][data_[i][t-1]]++;
         }
@@ -213,6 +234,32 @@ namespace hmm{
           max_pi = max_pi > pi_[i][K+1] ? max_pi : pi_[i][K+1];
         }
         K++;
+      }
+    }
+
+    void clear_empty_states() {
+      int cnt = 0;
+      for (int k = K-1; k >= 0; k--) {
+        if (!state_visited_[k]) {
+          beta_[K] += beta_[k];
+          beta_.erase(beta_.begin()+k);
+
+          pi_counts_.erase(k);
+          phi_counts_.erase(k);
+          pi_.erase(k);
+          phi_.erase(k);
+          for (int l = 0; l < K-1; l++) {
+            pi_[l].erase(pi_[l].begin() + k);
+          }
+
+          // this is way inefficient and instead of relabeling states after every sample, we should probably just track which states are "active". This'll do for now.
+          for (int i = 0; i < data_.size().size(); i++) {
+            for (int t = 0; t < data_[i].size(); t++) {
+              if (s_[i][t] > k) s_[i][t]--;
+            }
+          }
+          K--;
+        }
       }
     }
 
