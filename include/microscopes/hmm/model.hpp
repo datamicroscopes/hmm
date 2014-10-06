@@ -85,8 +85,8 @@ namespace hmm{
     }
 
     void sample_beam() {
-      sample_u();
-      sample_s();
+      sample_u(); // only time K increases
+      sample_s(); // 
       sample_pi();
       sample_phi();
       sample_beta();
@@ -101,7 +101,6 @@ namespace hmm{
     meta_vector<float> u_; // the slice sampling parameter for each time step in the series
 
     // these three all have the same shape as the transition matrix, approximately
-    meta_vector<size_t> m_; // auxilliary variable necessary for sampling beta. Size K x K.
     meta_vector<size_t> counts_; // the count of how many times a transition occurs between states. Size K x K.
     meta_vector<float> pi_; // the observed portion of the infinite transition matrix. Size K x K+1.
 
@@ -235,7 +234,9 @@ namespace hmm{
 
     }
 
-    void sample_m() {
+    void sample_beta() {
+      // sample auxiliary variable
+      meta_vector<size_t> m_(K, K);
       for (int i = 0; i < K; i++) {
         for (int j = 0; j < K; j++) {
           size_t n_ij = counts_[i][j];
@@ -252,10 +253,7 @@ namespace hmm{
           m_[i][j] = distributions::sample_from_scores_overwrite(rng, scores) + 1;
         }
       }
-    }
 
-    void sample_beta() {
-      sample_m();
       float alphas[K+1];
       float new_beta[K+1];
       for (int k = 0; k < K; k++) {
