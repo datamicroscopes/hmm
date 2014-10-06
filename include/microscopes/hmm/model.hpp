@@ -21,7 +21,15 @@ namespace hmm{
   class meta_vector {
   public:
 
-    meta_vector(): data_() {}
+    meta_vector() : data_() {}
+
+    meta_vector(size_t size) : data_(size) {}
+
+    meta_vector(size_t size_1, size_t size_2) : data_(size_1) {
+      for (int i = 0; i < size_1; i++) {
+        data_[i] = std::vector<T>(size_2);
+      }
+    }
 
     meta_vector(std::vector<size_t> size) : data_(size.size()) {
       for (int i = 0; i < data_.size(); i++) {
@@ -66,8 +74,13 @@ namespace hmm{
       H_(H),
       data_(data),
       u_(data.size()),
-      beta_(),
-      memoized_log_stirling_()
+      m_(1,1),
+      counts_(1,1),
+      pi_(1,2),
+      phi_(1,N),
+      beta_(2),
+      memoized_log_stirling_(),
+      K(1)
     {
     }
 
@@ -107,22 +120,48 @@ namespace hmm{
     // Over all instantiated states, the maximum value of the part of pi_k that belongs to the "unseen" states. 
     //Should be smaller than the least value of the auxiliary variable, so all possible states visited by the beam sampler are instantiated
     float max_pi; 
+    size_t K;
 
     // sampling functions. later we can integrate these into microscopes::kernels where appropriate.
     void sample_s() {
-      counts_ = meta_vector<size_t>(); // clear counts
-
       std::vector<size_t> sizes = data_.size();
+      counts_ = meta_vector<size_t>(pi_.size().size()); // clear counts
       for (int i = 0; i < sizes.size(); i++) {
         // Forward-filter
-        size_t last_state = 0; // always initialize at zero state
-        meta_vector<float> forward_probs;
+        meta_vector<float> probs = meta_vector<float>(sizes[i]);
         for (int t = 0; t < sizes[i]; t++) {
-
+          probs[t] = std::vector<float>(K);
+          float total_prob = 0.0;
+          for (int k = 0; k < K; k++) {
+            if (t == 0) {
+              probs[t][k] = phi_[k][data_[i][t]] * (u_[i][t] < pi_[0][k] ? 1.0 : 0.0);
+            }
+            else {
+              probs[t][k] = 0.0;
+              for (int l = 0; l < K; l++) {
+                if (u_[i][t] < pi_[l][k]) {
+                  probs[t][k] += probs[t-1][l];
+                }
+              }
+              probs[t][k] *= phi_[k][data_[i][t]];
+            }
+            total_prob += probs[t][k];
+          }
+          for (int k = 0; k < K; k++) { // normalize to prevent numerical underflow
+            probs[t][k] /= total_prob;
+          }
         }
 
         // Backwards-sample
-        for (int t = sizes[i]-1; t >= 0; t--) {
+        s_[i][sizes[i]-1] = distributions::sample_from_likelihoods(rng, probs[sizes[i]-1]);
+        for (int t = sizes[i]-1; t > 0; t--) {
+          for (int k = 0; k < K; k++) {
+            if (u_[i][t] >= pi_[k][s_[i][t]]) {
+              probs[t-1][k] = 0;
+            }
+          }
+          s_[i][t-1] = distributions::sample_from_likelihoods(rng, probs[t-1]);
+          // Update counts
 
         }
       }
@@ -148,9 +187,8 @@ namespace hmm{
       // If necessary, break the pi stick some more
       while (max_pi > min_u) {
         // Add new state
-        size_t K = pi_.size().size();
         pi_.push_back(std::vector<float>(K+1));
-        sample_pi_row(K, K);
+        sample_pi_row(K);
 
         // Break beta stick
         float bu = beta_[K];
@@ -168,24 +206,22 @@ namespace hmm{
           max_pi = max_pi > pi_[i][K]   ? max_pi : pi_[i][K];
           max_pi = max_pi > pi_[i][K+1] ? max_pi : pi_[i][K+1];
         }
-
-        // check that sizes are all consistent
+        K++;
       }
     }
 
     void sample_pi() {
-      size_t K = pi_.size().size();
       max_pi = 0.0;
       for (int i = 0; i < K; i++) {
-        sample_pi_row(i, K);
+        sample_pi_row(i);
       }
     }
 
-    void sample_pi_row(size_t i, size_t K) {
+    void sample_pi_row(size_t i) {
         float new_pi[K+1];
         float alphas[K+1];
-        for (int j = 0; j < K; j++) {
-          alphas[j] = counts_[i][j] + alpha0_ * beta_[j];
+        for (int k = 0; k < K; k++) {
+          alphas[k] = counts_[i][k] + alpha0_ * beta_[k];
         }
         alphas[K] = alpha0_ * beta_[K];
         distributions::sample_dirichlet(rng, K+1, alphas, new_pi);
@@ -200,9 +236,8 @@ namespace hmm{
     }
 
     void sample_m() {
-      std::vector<size_t> sizes = counts_.size();
-      for (int i = 0; i < sizes.size(); i++) {
-        for (int j = 0; j < sizes[i]; j++) {
+      for (int i = 0; i < K; i++) {
+        for (int j = 0; j < K; j++) {
           size_t n_ij = counts_[i][j];
           if (!memoized_log_stirling_.count(n_ij)) {
             memoized_log_stirling_[n_ij] = distributions::log_stirling1_row(n_ij);
@@ -210,7 +245,6 @@ namespace hmm{
 
           std::vector<float> stirling_row = memoized_log_stirling_[n_ij];
 
-          // there's gotta be a helper function somewhere in distributions that samples from discrete log probabilities efficiently
           std::vector<float> scores(n_ij);
           for (int m = 0; m < n_ij; m++) {
             scores[m] = stirling_row[m+1] + (m+1) * ( log( alpha0_ ) + log( beta_[j] ) );
@@ -222,7 +256,6 @@ namespace hmm{
 
     void sample_beta() {
       sample_m();
-      size_t K = m_.size().size();
       float alphas[K+1];
       float new_beta[K+1];
       for (int k = 0; k < K; k++) {
