@@ -74,7 +74,6 @@ namespace hmm{
       H_(H),
       data_(data),
       u_(data.size()),
-      m_(1,1),
       pi_counts_(1,1),
       pi_(1,2),
       phi_counts_(1,N),
@@ -168,7 +167,7 @@ namespace hmm{
           pi_counts_[s_[i][t-1]][s_[i][t]]++;
           phi_counts_[s_[i][t-1]][data_[i][t-1]]++;
         }
-        counts[0][s_[i][0]]++; // Also add count for state 0, which is the initial state
+        pi_counts_[0][s_[i][0]]++; // Also add count for state 0, which is the initial state
       }
     }
 
@@ -193,7 +192,9 @@ namespace hmm{
       while (max_pi > min_u) {
         // Add new state
         pi_.push_back(std::vector<float>(K+1));
+        phi_.push_back(std::vector<float>(N));
         sample_pi_row(K);
+        sample_phi_row(K);
 
         // Break beta stick
         float bu = beta_[K];
@@ -217,8 +218,8 @@ namespace hmm{
 
     void sample_pi() {
       max_pi = 0.0;
-      for (int i = 0; i < K; i++) {
-        sample_pi_row(i);
+      for (int k = 0; k < K; k++) {
+        sample_pi_row(k);
       }
     }
 
@@ -237,7 +238,21 @@ namespace hmm{
     }
 
     void sample_phi() {
+      for (int k = 0; k < K; k++) {
+        sample_phi_row(k);
+      }
+    }
 
+    void sample_phi_row(size_t k) {
+      float new_phi[N];
+      float alphas[N];
+      for (int n = 0; n < N; n++) {
+        alphas[n] = phi_counts_[k][n] + H_[n];
+      }
+      distributions::sample_dirichlet(rng, N, alphas, new_phi);
+      for (int n = 0; n < N; n++) {
+        phi_[k][n] = new_phi[n];
+      }
     }
 
     void sample_beta() {
