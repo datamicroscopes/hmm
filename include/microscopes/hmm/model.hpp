@@ -6,13 +6,11 @@
 
 #include <vector>
 #include <map>
+#include <chrono>
 
 namespace microscopes{
 namespace hmm{
   
-
-  distributions::rng_t rng;
-
   // A class for a vector of vectors, useful for representing pretty much everything we need for the beam sampler.
   // For instance, time series data can be stored as a vector of vectors, where each vector is one time series.
   // The transition matrix can also be stored as a vector of vectors, where each transition probability is one vector.
@@ -46,11 +44,11 @@ namespace hmm{
     }
 
     void erase(int i) {
-      erase(data_.begin()+i);
+      data_.erase(data_.begin()+i);
     }
 
     std::vector<size_t> size() {
-      std::vector<size_t> sizes(data_.size());
+      std::vector<size_t> sizes(0);
       for (std::vector<T> vec: data_) {
         sizes.push_back(vec.size());
       }
@@ -75,8 +73,8 @@ namespace hmm{
     hmm(float gamma, float alpha0, float *H, meta_vector<size_t> data):
       gamma_(gamma),
       alpha0_(alpha0),
-      H_(H),
       data_(data),
+      s_(data.size()),
       u_(data.size()),
       pi_counts_(1,1),
       pi_(1,2),
@@ -84,9 +82,17 @@ namespace hmm{
       phi_(1,N),
       state_visited_(1),
       beta_(2),
+      H_(H),
       memoized_log_stirling_(),
       K(1)
     {
+      // seed random number generator
+      typedef std::chrono::high_resolution_clock myclock;
+      myclock::time_point start =  myclock::now();
+      myclock::duration d = myclock::now() - start;
+      unsigned seed = d.count();
+      rng.seed(seed);
+
       beta_[0] = 0.5;
       beta_[1] = 0.5; // simple initialization
       state_visited_[0] = true;
@@ -113,7 +119,7 @@ namespace hmm{
     // parameters
 
     // these three all have the same shape as the data
-    const meta_vector<size_t> data_; // XXX: For now, the observation type is just a vector of vectors of ints. Later we can switch over to using recarrays
+    meta_vector<size_t> data_; // XXX: For now, the observation type is just a vector of vectors of ints. Later we can switch over to using recarrays
     meta_vector<size_t> s_; // the state sequence
     meta_vector<float> u_; // the slice sampling parameter for each time step in the series
 
@@ -129,9 +135,9 @@ namespace hmm{
     std::vector<bool> state_visited_;
 
     // hyperparameters
-    const float gamma_;
-    const float alpha0_;
-    const float H_[N]; // hyperparameters for a Dirichlet prior over observations. Will generalize this to other observation models later.
+    float gamma_;
+    float alpha0_;
+    float * H_; // hyperparameters for a Dirichlet prior over observations. Will generalize this to other observation models later.
 
     // helper fields
     std::map<size_t, std::vector<float> > memoized_log_stirling_; // memoize computation of log stirling numbers for speed when sampling m
@@ -139,6 +145,7 @@ namespace hmm{
     //Should be smaller than the least value of the auxiliary variable, so all possible states visited by the beam sampler are instantiated
     float max_pi; 
     size_t K;
+    distributions::rng_t rng;
 
     // sampling functions. later we can integrate these into microscopes::kernels where appropriate.
     void sample_s() {
@@ -204,7 +211,7 @@ namespace hmm{
           } else {
             prev_state = s_[i][j-1];
           }
-          u_[i][j] = sampler(rng) / (pi_[prev_state][s_[i][j]]); // scale the uniform sample to be between 0 and pi_{s_{t-1}s_t}
+          u_[i][j] =  sampler(rng) / (pi_[prev_state][s_[i][j]]); // scale the uniform sample to be between 0 and pi_{s_{t-1}s_t}
           min_u = min_u < u_[i][j] ? min_u : u_[i][j];
         }
       }
@@ -214,6 +221,8 @@ namespace hmm{
         // Add new state
         pi_.push_back(std::vector<float>(K+1));
         phi_.push_back(std::vector<float>(N));
+        pi_counts_.push_back(std::vector<size_t>(K));
+        phi_counts_.push_back(std::vector<size_t>(N));
         sample_pi_row(K);
         sample_phi_row(K);
 
@@ -308,17 +317,21 @@ namespace hmm{
       for (int i = 0; i < K; i++) {
         for (int j = 0; j < K; j++) {
           size_t n_ij = pi_counts_[i][j];
-          if (!memoized_log_stirling_.count(n_ij)) {
-            memoized_log_stirling_[n_ij] = distributions::log_stirling1_row(n_ij);
-          }
+          if (n_ij > 0) {
+            if (!memoized_log_stirling_.count(n_ij)) {
+              memoized_log_stirling_[n_ij] = distributions::log_stirling1_row(n_ij);
+            }
 
-          std::vector<float> stirling_row = memoized_log_stirling_[n_ij];
+            std::vector<float> stirling_row = memoized_log_stirling_[n_ij];
 
-          std::vector<float> scores(n_ij);
-          for (int m = 0; m < n_ij; m++) {
-            scores[m] = stirling_row[m+1] + (m+1) * ( log( alpha0_ ) + log( beta_[j] ) );
+            std::vector<float> scores(n_ij);
+            for (int m = 0; m < n_ij; m++) {
+              scores[m] = stirling_row[m+1] + (m+1) * ( log( alpha0_ ) + log( beta_[j] ) );
+            }
+            m_[i][j] = distributions::sample_from_scores_overwrite(rng, scores) + 1;
+          } else{
+            m_[i][j] = 0;
           }
-          m_[i][j] = distributions::sample_from_scores_overwrite(rng, scores) + 1;
         }
       }
 
