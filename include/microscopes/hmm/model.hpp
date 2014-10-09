@@ -67,10 +67,10 @@ namespace hmm{
   };
 
 // Implementation of the beam sampler for the HDP-HMM, following van Gael 2008
-  template <int N>
   class hmm {
   public:
-    hmm(float gamma, float alpha0, float *H, meta_vector<size_t> data):
+    hmm(float gamma, float alpha0, std::vector<float> H, meta_vector<size_t> data):
+      N(H.size()),
       gamma_(gamma),
       alpha0_(alpha0),
       data_(data),
@@ -78,21 +78,14 @@ namespace hmm{
       u_(data.size()),
       pi_counts_(1,1),
       pi_(1,2),
-      phi_counts_(1,N),
-      phi_(1,N),
+      phi_counts_(1,H.size()),
+      phi_(1,H.size()),
       state_visited_(1),
       beta_(2),
       H_(H),
       memoized_log_stirling_(),
       K(1)
     {
-      // seed random number generator
-      typedef std::chrono::high_resolution_clock myclock;
-      myclock::time_point start =  myclock::now();
-      myclock::duration d = myclock::now() - start;
-      unsigned seed = d.count();
-      rng.seed(seed);
-
       beta_[0] = 0.5;
       beta_[1] = 0.5; // simple initialization
       state_visited_[0] = true;
@@ -102,17 +95,15 @@ namespace hmm{
           phi_counts_[0][data[i][j]]++;
         }
       }
-      sample_pi();
-      sample_phi();
     }
 
-    void sample_beam() {
-      sample_u();
-      sample_s();
+    void sample_beam(distributions::rng_t &rng) {
+      sample_pi(rng);
+      sample_phi(rng);
+      sample_u(rng);
+      sample_s(rng);
       clear_empty_states();
-      sample_beta();
-      sample_pi();
-      sample_phi();
+      sample_beta(rng);
     }
   protected:
     
@@ -137,7 +128,7 @@ namespace hmm{
     // hyperparameters
     float gamma_;
     float alpha0_;
-    float * H_; // hyperparameters for a Dirichlet prior over observations. Will generalize this to other observation models later.
+    std::vector<float> H_; // hyperparameters for a Dirichlet prior over observations. Will generalize this to other observation models later.
 
     // helper fields
     std::map<size_t, std::vector<float> > memoized_log_stirling_; // memoize computation of log stirling numbers for speed when sampling m
@@ -145,10 +136,10 @@ namespace hmm{
     //Should be smaller than the least value of the auxiliary variable, so all possible states visited by the beam sampler are instantiated
     float max_pi; 
     size_t K;
-    distributions::rng_t rng;
+    size_t N;
 
     // sampling functions. later we can integrate these into microscopes::kernels where appropriate.
-    void sample_s() {
+    void sample_s(distributions::rng_t &rng) {
       std::vector<size_t> sizes = data_.size();
       pi_counts_ = meta_vector<size_t>(K,K); // clear counts
       phi_counts_ = meta_vector<size_t>(K,N);
@@ -199,7 +190,7 @@ namespace hmm{
       }
     }
 
-    void sample_u() {
+    void sample_u(distributions::rng_t &rng) {
       size_t prev_state;
       std::uniform_real_distribution<float> sampler (0.0, 1.0);
       std::vector<size_t> sizes = u_.size();
@@ -223,8 +214,8 @@ namespace hmm{
         phi_.push_back(std::vector<float>(N));
         pi_counts_.push_back(std::vector<size_t>(K));
         phi_counts_.push_back(std::vector<size_t>(N));
-        sample_pi_row(K);
-        sample_phi_row(K);
+        sample_pi_row(rng, K);
+        sample_phi_row(rng, K);
 
         // Break beta stick
         float bu = beta_[K];
@@ -272,14 +263,14 @@ namespace hmm{
       }
     }
 
-    void sample_pi() {
+    void sample_pi(distributions::rng_t &rng) {
       max_pi = 0.0;
       for (int k = 0; k < K; k++) {
-        sample_pi_row(k);
+        sample_pi_row(rng, k);
       }
     }
 
-    void sample_pi_row(size_t i) {
+    void sample_pi_row(distributions::rng_t &rng, size_t i) {
         float new_pi[K+1];
         float alphas[K+1];
         for (int k = 0; k < K; k++) {
@@ -293,13 +284,13 @@ namespace hmm{
         max_pi = max_pi > new_pi[K] ? max_pi : new_pi[K];
     }
 
-    void sample_phi() {
+    void sample_phi(distributions::rng_t &rng) {
       for (int k = 0; k < K; k++) {
-        sample_phi_row(k);
+        sample_phi_row(rng, k);
       }
     }
 
-    void sample_phi_row(size_t k) {
+    void sample_phi_row(distributions::rng_t &rng, size_t k) {
       float new_phi[N];
       float alphas[N];
       for (int n = 0; n < N; n++) {
@@ -311,7 +302,7 @@ namespace hmm{
       }
     }
 
-    void sample_beta() {
+    void sample_beta(distributions::rng_t &rng) {
       // sample auxiliary variable
       meta_vector<size_t> m_(K, K);
       for (int i = 0; i < K; i++) {
