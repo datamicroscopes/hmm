@@ -11,13 +11,13 @@
 #include <Eigen/Dense>
 
 using namespace Eigen;
-typedef MatrixXs Matrix<size_t, Dynamic, Dynamic>;
+typedef Matrix<size_t, Dynamic, Dynamic> MatrixXs;
 
 namespace microscopes{
 namespace hmm{
   
   // By all rights these helper functions should be in some utility file somewhere, but I am putting them here for now
-  <template T>
+  template <typename T>
   void removeRow(T& matrix, size_t rowToRemove)
   {
       size_t numRows = matrix.rows()-1;
@@ -29,7 +29,7 @@ namespace hmm{
       matrix.conservativeResize(numRows,numCols);
   }
 
-  <template T>
+  template <typename T>
   void removeColumn(T& matrix, size_t colToRemove)
   {
       size_t numRows = matrix.rows();
@@ -99,7 +99,7 @@ namespace hmm{
 // Implementation of the beam sampler for the HDP-HMM, following van Gael 2008
   class hmm {
   public:
-    hmm(float gamma, float alpha0, const std::vector<float> &H, const meta_vector<size_t> &data):
+    hmm(float gamma, float alpha0, const std::vector<float> &H, meta_vector<size_t> &data):
       N(H.size()),
       gamma_(gamma),
       alpha0_(alpha0),
@@ -140,7 +140,7 @@ namespace hmm{
     // parameters
 
     // these three all have the same shape as the data
-    const meta_vector<size_t> data_; // XXX: For now, the observation type is just a vector of vectors of ints. Later we can switch over to using recarrays
+    meta_vector<size_t> data_; // XXX: For now, the observation type is just a vector of vectors of ints. Later we can switch over to using recarrays
     meta_vector<size_t> s_; // the state sequence
     meta_vector<float> u_; // the slice sampling parameter for each time step in the series
 
@@ -200,7 +200,8 @@ namespace hmm{
         }
 
         // Backwards-sample
-        s_[i][sizes[i]-1] = distributions::sample_from_likelihoods(rng, probs.col(sizes[i]-1).data());
+        float * foo = probs.col(sizes[i]-1).data();
+        s_[i][sizes[i]-1] = distributions::sample_from_likelihoods(rng, std::vector<float>(foo, foo + K));
         state_visited_[s_[i][sizes[i]-1]] = true;
         phi_counts_(s_[i][sizes[i]-1],data_[i][sizes[i]-1])++;
         for (int t = sizes[i]-1; t > 0; t--) {
@@ -209,7 +210,8 @@ namespace hmm{
               probs(t-1,k) = 0;
             }
           }
-          s_[i][t-1] = distributions::sample_from_likelihoods(rng, probs.col(t-1).data());
+          foo = probs.col(t-1).data();
+          s_[i][t-1] = distributions::sample_from_likelihoods(rng, std::vector<float>(foo, foo + K));
           // Update counts
           state_visited_[s_[i][t-1]] = true;
           pi_counts_(s_[i][t-1],s_[i][t])++;
@@ -339,7 +341,7 @@ namespace hmm{
       MatrixXs m_ = MatrixXs::Zero(K, K);
       for (int i = 0; i < K; i++) {
         for (int j = 0; j < K; j++) {
-          size_t n_ij = pi_counts_[i][j];
+          size_t n_ij = pi_counts_(i,j);
           if (n_ij > 0) {
             if (!memoized_log_stirling_.count(n_ij)) {
               memoized_log_stirling_[n_ij] = distributions::log_stirling1_row(n_ij);
@@ -358,8 +360,9 @@ namespace hmm{
 
       float alphas[K+1];
       float new_beta[K+1];
+      MatrixXs m_sum = m_.rowwise().sum();
       for (int k = 0; k < K; k++) {
-        alphas[k] = m_.sum(k);
+        alphas[k] = m_sum(k);
       }
       alphas[K] = gamma_;
       distributions::sample_dirichlet(rng, K+1, alphas, new_beta);
