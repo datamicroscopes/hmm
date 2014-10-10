@@ -200,7 +200,7 @@ namespace hmm{
         }
 
         // Backwards-sample
-        float * foo = probs.col(sizes[i]-1).data();
+        float * foo = probs.row(sizes[i]-1).data();
         s_[i][sizes[i]-1] = distributions::sample_from_likelihoods(rng, std::vector<float>(foo, foo + K));
         state_visited_[s_[i][sizes[i]-1]] = true;
         phi_counts_(s_[i][sizes[i]-1],data_[i][sizes[i]-1])++;
@@ -210,7 +210,7 @@ namespace hmm{
               probs(t-1,k) = 0;
             }
           }
-          foo = probs.col(t-1).data();
+          foo = probs.row(t-1).data();
           s_[i][t-1] = distributions::sample_from_likelihoods(rng, std::vector<float>(foo, foo + K));
           // Update counts
           state_visited_[s_[i][t-1]] = true;
