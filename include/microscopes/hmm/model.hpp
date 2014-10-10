@@ -4,42 +4,19 @@
 #include <distributions/random.hpp>
 #include <distributions/random_fwd.hpp>
 
+#include <microscopes/common/util.hpp>
+
 #include <vector>
 #include <map>
 #include <chrono>
 
-#include <Eigen/Dense>
+#include <eigen3/Eigen/Dense>
 
 using namespace Eigen;
 typedef Matrix<size_t, Dynamic, Dynamic> MatrixXs;
 
 namespace microscopes{
 namespace hmm{
-  
-  // By all rights these helper functions should be in some utility file somewhere, but I am putting them here for now
-  template <typename T>
-  void removeRow(T& matrix, size_t rowToRemove)
-  {
-      size_t numRows = matrix.rows()-1;
-      size_t numCols = matrix.cols();
-
-      if( rowToRemove < numRows )
-          matrix.block(rowToRemove,0,numRows-rowToRemove,numCols) = matrix.block(rowToRemove+1,0,numRows-rowToRemove,numCols);
-
-      matrix.conservativeResize(numRows,numCols);
-  }
-
-  template <typename T>
-  void removeColumn(T& matrix, size_t colToRemove)
-  {
-      size_t numRows = matrix.rows();
-      size_t numCols = matrix.cols()-1;
-
-      if( colToRemove < numCols )
-          matrix.block(0,colToRemove,numRows,numCols-colToRemove) = matrix.block(0,colToRemove+1,numRows,numCols-colToRemove);
-
-      matrix.conservativeResize(numRows,numCols);
-  }
 
 // Implementation of the beam sampler for the HDP-HMM, following van Gael 2008
   class hmm {
@@ -222,14 +199,14 @@ namespace hmm{
           beta_[K] += beta_[k];
           beta_.erase(beta_.begin()+k);
 
-          removeRow<MatrixXf>(phi_, k);
-          removeRow<MatrixXs>(phi_counts_, k);
+          common::util::remove_row<float>(phi_, k);
+          common::util::remove_row<size_t>(phi_counts_, k);
 
-          removeRow<MatrixXf>(pi_, k);
-          removeRow<MatrixXs>(pi_counts_, k);
+          common::util::remove_row<float>(pi_, k);
+          common::util::remove_row<size_t>(pi_counts_, k);
 
-          removeColumn<MatrixXf>(pi_, k);
-          removeColumn<MatrixXs>(pi_counts_, k);
+          common::util::remove_column<float>(pi_, k);
+          common::util::remove_column<size_t>(pi_counts_, k);
 
           // this is way inefficient and instead of relabeling states after every sample, we should probably just track which states are "active". This'll do for now.
           for (int i = 0; i < data_.size(); i++) {
