@@ -3,13 +3,15 @@
 
 // kill this as soon as we integrate this into the rest of the build
 int main() {
-  microscopes::hmm::meta_vector<size_t> data(2,4);
+  std::vector<std::vector<size_t> > data(2);
 
+  data[0] = std::vector<size_t>(4);
   data[0][0] = 1;
   data[0][1] = 0;
   data[0][2] = 1;
   data[0][3] = 2;
 
+  data[1] = std::vector<size_t>(4);
   data[1][0] = 0;
   data[1][1] = 2;
   data[1][2] = 1;

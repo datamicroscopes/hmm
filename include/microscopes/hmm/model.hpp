@@ -41,65 +41,10 @@ namespace hmm{
       matrix.conservativeResize(numRows,numCols);
   }
 
-  // A class for a vector of vectors, useful for representing pretty much everything we need for the beam sampler.
-  // For instance, time series data can be stored as a vector of vectors, where each vector is one time series.
-  // The transition matrix can also be stored as a vector of vectors, where each transition probability is one vector.
-
-  template <typename T>
-  class meta_vector {
-  public:
-
-    meta_vector() : data_() {}
-
-    meta_vector(size_t size) : data_(size) {}
-
-    meta_vector(size_t size_1, size_t size_2) : data_(size_1) {
-      for (int i = 0; i < size_1; i++) {
-        data_[i] = std::vector<T>(size_2);
-      }
-    }
-
-    meta_vector(std::vector<size_t> size) : data_(size.size()) {
-      for (int i = 0; i < data_.size(); i++) {
-        data_[i] = std::vector<T>(size[i]);
-      }
-    }
-
-    std::vector<T>& operator[](size_t i) {
-      return data_[i];
-    }
-
-    void push_back(std::vector<T> vec) {
-      data_.push_back(vec);
-    }
-
-    void erase(int i) {
-      data_.erase(data_.begin()+i);
-    }
-
-    std::vector<size_t> size() {
-      std::vector<size_t> sizes(0);
-      for (std::vector<T> vec: data_) {
-        sizes.push_back(vec.size());
-      }
-      return sizes;
-    }
-
-    T sum(size_t i) { // useful for resampling m, the number of tables serving a dish
-      T result = (T)0;
-      for(T t: data_[i]) {
-        result += t;
-      }
-      return result;
-    }
-  protected:
-    std::vector<std::vector<T> > data_;
-  };
-
 // Implementation of the beam sampler for the HDP-HMM, following van Gael 2008
   class hmm {
   public:
-    hmm(float gamma, float alpha0, const std::vector<float> &H, meta_vector<size_t> &data):
+    hmm(float gamma, float alpha0, const std::vector<float> &H, const std::vector<std::vector<size_t> > &data):
       N(H.size()),
       gamma_(gamma),
       alpha0_(alpha0),
@@ -119,7 +64,9 @@ namespace hmm{
       beta_[0] = 0.5;
       beta_[1] = 0.5; // simple initialization
       state_visited_[0] = true;
-      for (int i = 0; i < data.size().size(); i++) {
+      for (int i = 0; i < data.size(); i++) {
+        s_[i] = std::vector<size_t>(data[i].size());
+        u_[i] = std::vector<float>(data[i].size());
         for (int j = 0; j < data[i].size(); j++) {
           pi_counts_(0,0)++;
           phi_counts_(0,data[i][j])++;
@@ -140,9 +87,9 @@ namespace hmm{
     // parameters
 
     // these three all have the same shape as the data
-    meta_vector<size_t> data_; // XXX: For now, the observation type is just a vector of vectors of ints. Later we can switch over to using recarrays
-    meta_vector<size_t> s_; // the state sequence
-    meta_vector<float> u_; // the slice sampling parameter for each time step in the series
+    const std::vector<std::vector <size_t> > data_; // XXX: For now, the observation type is just a vector of vectors of ints. Later we can switch over to using recarrays
+    std::vector<std::vector<size_t> > s_; // the state sequence
+    std::vector<std::vector<float> > u_; // the slice sampling parameter for each time step in the series
 
     // these three all have the same shape as the transition matrix, approximately
     MatrixXs pi_counts_; // the count of how many times a transition occurs between states. Size K x K.
@@ -170,14 +117,13 @@ namespace hmm{
 
     // sampling functions. later we can integrate these into microscopes::kernels where appropriate.
     void sample_s(distributions::rng_t &rng) {
-      std::vector<size_t> sizes = data_.size();
       pi_counts_ = MatrixXs::Zero(K,K); // clear counts
       phi_counts_ = MatrixXs::Zero(K,N);
       state_visited_ = std::vector<bool>(K);
-      for (int i = 0; i < sizes.size(); i++) {
+      for (int i = 0; i < data_.size(); i++) {
         // Forward-filter
-        MatrixXf probs(sizes[i],K);
-        for (int t = 0; t < sizes[i]; t++) {
+        MatrixXf probs(data_[i].size(),K);
+        for (int t = 0; t < data_[i].size(); t++) {
           float total_prob = 0.0;
           for (int k = 0; k < K; k++) {
             if (t == 0) {
@@ -200,11 +146,11 @@ namespace hmm{
         }
 
         // Backwards-sample
-        float * foo = probs.row(sizes[i]-1).data();
-        s_[i][sizes[i]-1] = distributions::sample_from_likelihoods(rng, std::vector<float>(foo, foo + K));
-        state_visited_[s_[i][sizes[i]-1]] = true;
-        phi_counts_(s_[i][sizes[i]-1],data_[i][sizes[i]-1])++;
-        for (int t = sizes[i]-1; t > 0; t--) {
+        float * foo = probs.row(data_[i].size()-1).data();
+        s_[i][data_[i].size()-1] = distributions::sample_from_likelihoods(rng, std::vector<float>(foo, foo + K));
+        state_visited_[s_[i][data_[i].size()-1]] = true;
+        phi_counts_(s_[i][data_[i].size()-1],data_[i][data_[i].size()-1])++;
+        for (int t = data_[i].size()-1; t > 0; t--) {
           for (int k = 0; k < K; k++) {
             if (u_[i][t] >= pi_(k,s_[i][t])) {
               probs(t-1,k) = 0;
@@ -224,10 +170,9 @@ namespace hmm{
     void sample_u(distributions::rng_t &rng) {
       size_t prev_state;
       std::uniform_real_distribution<float> sampler (0.0, 1.0);
-      std::vector<size_t> sizes = u_.size();
       float min_u = 1.0; // used to figure out where to truncate sampling of pi
-      for (int i = 0; i < sizes.size(); i++) {
-        for(int j = 0; j < sizes[i]; j++) {
+      for (int i = 0; i < data_.size(); i++) {
+        for(int j = 0; j < data_[i].size(); j++) {
           if (j == 0) {
             prev_state = 0;
           } else {
@@ -287,7 +232,7 @@ namespace hmm{
           removeColumn<MatrixXs>(pi_counts_, k);
 
           // this is way inefficient and instead of relabeling states after every sample, we should probably just track which states are "active". This'll do for now.
-          for (int i = 0; i < data_.size().size(); i++) {
+          for (int i = 0; i < data_.size(); i++) {
             for (int t = 0; t < data_[i].size(); t++) {
               if (s_[i][t] > k) s_[i][t]--;
             }
