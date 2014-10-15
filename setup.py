@@ -205,7 +205,6 @@ def make_extension(module_name):
 extensions = cythonize([
     make_extension('microscopes.hmm._model'),
     make_extension('microscopes.hmm.definition'),
-    make_extension('microscopes.hmm.kernels'),
 ], include_path=[microscopes_common_cython_inc])
 
 with open('README.md') as f:

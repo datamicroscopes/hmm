@@ -22,9 +22,6 @@ namespace hmm{
   class hmm {
   public:
     hmm(float gamma, float alpha0, const std::vector<float> &H, const std::vector<std::vector<size_t> > &data):
-      N(H.size()),
-      gamma_(gamma),
-      alpha0_(alpha0),
       data_(data),
       s_(data.size()),
       u_(data.size()),
@@ -32,19 +29,22 @@ namespace hmm{
       pi_(1,2),
       phi_counts_(MatrixXs::Zero(1,H.size())),
       phi_(1,H.size()),
-      state_visited_(1),
       beta_(2),
+      state_visited_(1),
+      gamma_(gamma),
+      alpha0_(alpha0),
       H_(H),
       memoized_log_stirling_(),
-      K(1)
+      K(1),
+      N(H.size())
     {
       beta_[0] = 0.5;
       beta_[1] = 0.5; // simple initialization
       state_visited_[0] = true;
-      for (int i = 0; i < data.size(); i++) {
+      for (size_t i = 0; i < data.size(); i++) {
         s_[i] = std::vector<size_t>(data[i].size());
         u_[i] = std::vector<float>(data[i].size());
-        for (int j = 0; j < data[i].size(); j++) {
+        for (size_t j = 0; j < data[i].size(); j++) {
           pi_counts_(0,0)++;
           phi_counts_(0,data[i][j])++;
         }
@@ -97,18 +97,18 @@ namespace hmm{
       pi_counts_ = MatrixXs::Zero(K,K); // clear counts
       phi_counts_ = MatrixXs::Zero(K,N);
       state_visited_ = std::vector<bool>(K);
-      for (int i = 0; i < data_.size(); i++) {
+      for (size_t i = 0; i < data_.size(); i++) {
         // Forward-filter
         MatrixXf probs(data_[i].size(),K);
-        for (int t = 0; t < data_[i].size(); t++) {
+        for (size_t t = 0; t < data_[i].size(); t++) {
           float total_prob = 0.0;
-          for (int k = 0; k < K; k++) {
+          for (size_t k = 0; k < K; k++) {
             if (t == 0) {
               probs(t,k) = phi_(k,data_[i][t]) * (u_[i][t] < pi_(0,k) ? 1.0 : 0.0);
             }
             else {
               probs(t,k) = 0.0;
-              for (int l = 0; l < K; l++) {
+              for (size_t l = 0; l < K; l++) {
                 if (u_[i][t] < pi_(l,k)) {
                   probs(t,k) += probs(t-1,l);
                 }
@@ -117,7 +117,7 @@ namespace hmm{
             }
             total_prob += probs(t,k);
           }
-          for (int k = 0; k < K; k++) { // normalize to prevent numerical underflow
+          for (size_t k = 0; k < K; k++) { // normalize to prevent numerical underflow
             probs(t,k) /= total_prob;
           }
         }
@@ -128,7 +128,7 @@ namespace hmm{
         state_visited_[s_[i][data_[i].size()-1]] = true;
         phi_counts_(s_[i][data_[i].size()-1],data_[i][data_[i].size()-1])++;
         for (int t = data_[i].size()-1; t > 0; t--) {
-          for (int k = 0; k < K; k++) {
+          for (size_t k = 0; k < K; k++) {
             if (u_[i][t] >= pi_(k,s_[i][t])) {
               probs(t-1,k) = 0;
             }
@@ -148,8 +148,8 @@ namespace hmm{
       size_t prev_state;
       std::uniform_real_distribution<float> sampler (0.0, 1.0);
       float min_u = 1.0; // used to figure out where to truncate sampling of pi
-      for (int i = 0; i < data_.size(); i++) {
-        for(int j = 0; j < data_[i].size(); j++) {
+      for (size_t i = 0; i < data_.size(); i++) {
+        for(size_t j = 0; j < data_[i].size(); j++) {
           if (j == 0) {
             prev_state = 0;
           } else {
@@ -180,7 +180,7 @@ namespace hmm{
 
         // Add new transition to each state
         max_pi = 0.0;
-        for (int i = 0; i < K+1; i++) {
+        for (size_t i = 0; i < K+1; i++) {
           float pu = pi_(i,K);
           float pk = distributions::sample_beta(rng, alpha0_ * beta_[K], alpha0_ * beta_[K+1]);
           pi_(i,K)   = pu * pk;
@@ -193,8 +193,7 @@ namespace hmm{
     }
 
     void clear_empty_states() {
-      int cnt = 0;
-      for (int k = K-1; k >= 0; k--) {
+      for (size_t k = K-1; k >= 0; k--) {
         if (!state_visited_[k]) {
           beta_[K] += beta_[k];
           beta_.erase(beta_.begin()+k);
@@ -209,8 +208,8 @@ namespace hmm{
           common::util::remove_column<size_t>(pi_counts_, k);
 
           // this is way inefficient and instead of relabeling states after every sample, we should probably just track which states are "active". This'll do for now.
-          for (int i = 0; i < data_.size(); i++) {
-            for (int t = 0; t < data_[i].size(); t++) {
+          for (size_t i = 0; i < data_.size(); i++) {
+            for (size_t t = 0; t < data_[i].size(); t++) {
               if (s_[i][t] > k) s_[i][t]--;
             }
           }
@@ -221,7 +220,7 @@ namespace hmm{
 
     void sample_pi(distributions::rng_t &rng) {
       max_pi = 0.0;
-      for (int k = 0; k < K; k++) {
+      for (size_t k = 0; k < K; k++) {
         sample_pi_row(rng, k);
       }
     }
@@ -229,19 +228,19 @@ namespace hmm{
     void sample_pi_row(distributions::rng_t &rng, size_t i) {
         float new_pi[K+1];
         float alphas[K+1];
-        for (int k = 0; k < K; k++) {
+        for (size_t k = 0; k < K; k++) {
           alphas[k] = pi_counts_(i,k) + alpha0_ * beta_[k];
         }
         alphas[K] = alpha0_ * beta_[K];
         distributions::sample_dirichlet(rng, K+1, alphas, new_pi);
-        for (int j = 0; j < K+1; j++) {
+        for (size_t j = 0; j < K+1; j++) {
           pi_(i,j) = new_pi[i];
         }
         max_pi = max_pi > new_pi[K] ? max_pi : new_pi[K];
     }
 
     void sample_phi(distributions::rng_t &rng) {
-      for (int k = 0; k < K; k++) {
+      for (size_t k = 0; k < K; k++) {
         sample_phi_row(rng, k);
       }
     }
@@ -249,11 +248,11 @@ namespace hmm{
     void sample_phi_row(distributions::rng_t &rng, size_t k) {
       float new_phi[N];
       float alphas[N];
-      for (int n = 0; n < N; n++) {
+      for (size_t n = 0; n < N; n++) {
         alphas[n] = phi_counts_(k,n) + H_[n];
       }
       distributions::sample_dirichlet(rng, N, alphas, new_phi);
-      for (int n = 0; n < N; n++) {
+      for (size_t n = 0; n < N; n++) {
         phi_(k,n) = new_phi[n];
       }
     }
@@ -261,8 +260,8 @@ namespace hmm{
     void sample_beta(distributions::rng_t &rng) {
       // sample auxiliary variable
       MatrixXs m_ = MatrixXs::Zero(K, K);
-      for (int i = 0; i < K; i++) {
-        for (int j = 0; j < K; j++) {
+      for (size_t i = 0; i < K; i++) {
+        for (size_t j = 0; j < K; j++) {
           size_t n_ij = pi_counts_(i,j);
           if (n_ij > 0) {
             if (!memoized_log_stirling_.count(n_ij)) {
@@ -272,7 +271,7 @@ namespace hmm{
             std::vector<float> stirling_row = memoized_log_stirling_[n_ij];
 
             std::vector<float> scores(n_ij);
-            for (int m = 0; m < n_ij; m++) {
+            for (size_t m = 0; m < n_ij; m++) {
               scores[m] = stirling_row[m+1] + (m+1) * ( log( alpha0_ ) + log( beta_[j] ) );
             }
             m_(i,j) = distributions::sample_from_scores_overwrite(rng, scores) + 1;
@@ -283,12 +282,12 @@ namespace hmm{
       float alphas[K+1];
       float new_beta[K+1];
       MatrixXs m_sum = m_.rowwise().sum();
-      for (int k = 0; k < K; k++) {
+      for (size_t k = 0; k < K; k++) {
         alphas[k] = m_sum(k);
       }
       alphas[K] = gamma_;
       distributions::sample_dirichlet(rng, K+1, alphas, new_beta);
-      for (int k = 0; k <= K; k++) {
+      for (size_t k = 0; k <= K; k++) {
         beta_[k] = new_beta[k];
       }
     }
