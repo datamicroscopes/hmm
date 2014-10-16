@@ -18,8 +18,14 @@ typedef Matrix<size_t, Dynamic, Dynamic> MatrixXs;
 namespace microscopes{
 namespace hmm{
 
+  class model_definition {
+  public:
+    model_definition()
+  protected:
+  };
+
 // Implementation of the beam sampler for the HDP-HMM, following van Gael 2008
-  class hmm {
+  class state {
   public:
     hmm(float gamma, float alpha0, const std::vector<float> &H, const std::vector<std::vector<size_t> > &data):
       data_(data),
