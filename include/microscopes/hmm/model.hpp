@@ -20,14 +20,26 @@ namespace hmm{
 
   class model_definition {
   public:
-    model_definition()
+    /**
+    * N - size of observation vocabulary
+    **/
+    model_definition(size_t N): N_(N)
+    {
+      MICROSCOPES_DCHECK(N > 0, "Vocabulary cannot be empty");
+    }
+    inline size_t N() const { return N_; }
   protected:
+    size_t N_;
   };
 
 // Implementation of the beam sampler for the HDP-HMM, following van Gael 2008
   class state {
   public:
-    hmm(float gamma, float alpha0, const std::vector<float> &H, const std::vector<std::vector<size_t> > &data):
+    hmm(const model_definition &defn, 
+        float gamma,
+        float alpha0,
+        const std::vector<float> &H,
+        const std::vector<std::vector<size_t> > &data):
       data_(data),
       s_(data.size()),
       u_(data.size()),
@@ -42,8 +54,9 @@ namespace hmm{
       H_(H),
       memoized_log_stirling_(),
       K(1),
-      N(H.size())
+      N(defn.N())
     {
+      MICROSCOPES_DCHECK(H.size() == N, "Number of hyperparameters must match vocabulary size.");
       beta_[0] = 0.5;
       beta_[1] = 0.5; // simple initialization
       state_visited_[0] = true;
