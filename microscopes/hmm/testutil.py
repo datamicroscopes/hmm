@@ -6,6 +6,13 @@ import numpy as np
 from microscopes.common import validator
 from microscopes.hmm.definition import model_definition
 
+def toy_model(defn, states=5):
+    # generate the observation and transition matrix
+    obs_mat   = np.random.dirichlet(alpha=np.ones(defn.N()),size=states)
+    trans_mat = np.random.dirichlet(alpha=np.ones(states),size=states)
+
+    return obs_mat, trans_mat
+
 def toy_dataset(defn, states=5, avglen=100, numobs=100):
     """Create a toy dataset for evaluating HMM inference
 
@@ -20,9 +27,7 @@ def toy_dataset(defn, states=5, avglen=100, numobs=100):
 
     validator.validate_type(defn, model_definition, 'defn')
 
-    # generate the observation and transition matrix
-    obs_mat   = np.random.dirichlet(alpha=np.ones(defn.N()),size=states)
-    trans_mat = np.random.dirichlet(alpha=np.ones(states),size=states)
+    obs_mat, trans_mat = toy_model(defn, states)
 
     # generate data
     data = []
@@ -31,7 +36,6 @@ def toy_dataset(defn, states=5, avglen=100, numobs=100):
       state = 0
       data.append([])
       for t in xrange(T):
-        print state
         data[i].append(np.nonzero(np.random.multinomial(n=1,pvals=obs_mat[state]))[0][0])
         state = np.nonzero(np.random.multinomial(n=1,pvals=trans_mat[state]))[0][0]
     return data
