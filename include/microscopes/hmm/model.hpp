@@ -12,11 +12,11 @@
 
 #include <eigen3/Eigen/Dense>
 
-using namespace Eigen;
-typedef Matrix<size_t, Dynamic, Dynamic> MatrixXs;
-
 namespace microscopes{
 namespace hmm{
+
+  typedef Eigen::Matrix<size_t, Eigen::Dynamic, Eigen::Dynamic> MatrixXs;
+  typedef Eigen::MatrixXf MatrixXf;
 
   class model_definition {
   public:
@@ -35,7 +35,7 @@ namespace hmm{
 // Implementation of the beam sampler for the HDP-HMM, following van Gael 2008
   class state {
   public:
-    state(const model_definition &defn, 
+    state(const model_definition &defn,
         float gamma,
         float alpha0,
         const std::vector<float> &H,
@@ -79,7 +79,7 @@ namespace hmm{
       sample_beta(rng);
     }
   protected:
-    
+
     // parameters
 
     // these three all have the same shape as the data
@@ -105,9 +105,9 @@ namespace hmm{
 
     // helper fields
     std::map<size_t, std::vector<float> > memoized_log_stirling_; // memoize computation of log stirling numbers for speed when sampling m
-    // Over all instantiated states, the maximum value of the part of pi_k that belongs to the "unseen" states. 
+    // Over all instantiated states, the maximum value of the part of pi_k that belongs to the "unseen" states.
     //Should be smaller than the least value of the auxiliary variable, so all possible states visited by the beam sampler are instantiated
-    float max_pi; 
+    float max_pi;
     size_t K;
     const size_t N;
 
@@ -212,7 +212,7 @@ namespace hmm{
     }
 
     void clear_empty_states() {
-      for (size_t k = K-1; k >= 0; k--) {
+      for (ssize_t k = K-1; k >= 0; k--) {
         if (!state_visited_[k]) {
           beta_[K] += beta_[k];
           beta_.erase(beta_.begin()+k);
@@ -229,7 +229,7 @@ namespace hmm{
           // this is way inefficient and instead of relabeling states after every sample, we should probably just track which states are "active". This'll do for now.
           for (size_t i = 0; i < data_.size(); i++) {
             for (size_t t = 0; t < data_[i].size(); t++) {
-              if (s_[i][t] > k) s_[i][t]--;
+              if (s_[i][t] > static_cast<size_t>(k)) s_[i][t]--;
             }
           }
           K--;
