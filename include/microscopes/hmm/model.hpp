@@ -35,7 +35,7 @@ namespace hmm{
 // Implementation of the beam sampler for the HDP-HMM, following van Gael 2008
   class state {
   public:
-    hmm(const model_definition &defn, 
+    state(const model_definition &defn, 
         float gamma,
         float alpha0,
         const std::vector<float> &H,

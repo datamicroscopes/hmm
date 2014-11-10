@@ -6,8 +6,8 @@ from microscopes.common import validator
 from microscopes.common.rng import rng
 from microscopes.common.variadic._dataview import abstract_dataview
 from microscopes.hmm.definition import model_definition
-from microscopes.hmm.model import state, bind
-from microscopes.hmm.kernels import beam
+from microscopes.hmm.model import state
+# from microscopes.hmm.kernels import beam
 
 import itertools as it
 import copy
@@ -44,9 +44,9 @@ class runner(object):
     """
 
     def __init__(self, defn, view, latent, kernel_config):
-        # validator.validate_type(defn, model_definition, 'defn')
-        # validator.validate_type(view, abstract_dataview, 'view')
-        # validator.validate_type(latent, state, 'latent')
+        validator.validate_type(defn, model_definition, 'defn')
+        validator.validate_type(view, abstract_dataview, 'view')
+        validator.validate_type(latent, state, 'latent')
 
         self._defn = defn
         self._view = view

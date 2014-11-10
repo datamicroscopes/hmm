@@ -25,8 +25,9 @@ int main() {
   unsigned seed = d.count();
   rng.seed(seed);
 
+  microscopes::hmm::model_definition defn(3);
   std::vector<float> H = {2.0,1.0,1.0};
-  microscopes::hmm::hmm test(0.1, 1.0, H, data);
+  microscopes::hmm::state test(defn, 0.1, 1.0, H, data);
   for (int i = 0; i < 1000; i++) {
     std::cout << i << std::endl;
     test.sample_beam(rng);
