@@ -1,6 +1,6 @@
 from microscopes.common import validator
 
-cpdef class model_definition:
+cdef class model_definition:
     def __cinit__(self, N):
         validator.validate_positive(N, "N")
 
