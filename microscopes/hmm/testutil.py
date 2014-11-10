@@ -39,3 +39,34 @@ def toy_dataset(defn, states=5, avglen=100, numobs=100):
         data[i].append(np.nonzero(np.random.multinomial(n=1,pvals=obs_mat[state]))[0][0])
         state = np.nonzero(np.random.multinomial(n=1,pvals=trans_mat[state]))[0][0]
     return data
+
+def toy_dataset_and_states(defn, states=5, avglen=100, numobs=100):
+    """Create a toy dataset for evaluating HMM inference, where each datum
+    is a (state, observation) tuple
+
+    Parameters
+    ----------
+    defn:   model definition
+    states: number of latent states
+    avlen:  average length of one observation sequence
+      (actual length is sampled from a poisson distribution)
+    numobs: number of observation sequences
+    """
+
+    validator.validate_type(defn, model_definition, 'defn')
+
+    obs_mat, trans_mat = toy_model(defn, states)
+
+    # generate data
+    data = []
+    states = []
+    for i in xrange(numobs):
+      T = np.random.poisson(lam=avglen)
+      state = 0
+      data.append([])
+      states.append([])
+      for t in xrange(T):
+        state = np.nonzero(np.random.multinomial(n=1,pvals=trans_mat[state]))[0][0]
+        data[i].append(np.nonzero(np.random.multinomial(n=1,pvals=obs_mat[state]))[0][0])
+        states[i].append(state)
+    return [zip(d,s) for d in data for s in states]
