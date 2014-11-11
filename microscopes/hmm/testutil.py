@@ -34,15 +34,14 @@ def toy_dataset(defn, states=5, avglen=100, numobs=100):
     for i in xrange(numobs):
       T = np.random.poisson(lam=avglen)
       state = 0
-      data.append([])
+      data.append(T * [None])
       for t in xrange(T):
-        data[i].append(np.nonzero(np.random.multinomial(n=1,pvals=obs_mat[state]))[0][0])
-        state = np.nonzero(np.random.multinomial(n=1,pvals=trans_mat[state]))[0][0]
+        state      = np.nonzero(np.random.multinomial(n=1,pvals=trans_mat[state]))[0][0]
+        data[i][t] = np.nonzero(np.random.multinomial(n=1,pvals=obs_mat[state]))[0][0]
     return data
 
 def toy_dataset_and_states(defn, states=5, avglen=100, numobs=100):
-    """Create a toy dataset for evaluating HMM inference, where each datum
-    is a (state, observation) tuple
+    """Create a toy dataset for evaluating HMM inference, along with the state sequence
 
     Parameters
     ----------
@@ -63,10 +62,10 @@ def toy_dataset_and_states(defn, states=5, avglen=100, numobs=100):
     for i in xrange(numobs):
       T = np.random.poisson(lam=avglen)
       state = 0
-      data.append([])
-      states.append([])
+      data.append(T * [None])
+      states.append(T * [None])
       for t in xrange(T):
-        state = np.nonzero(np.random.multinomial(n=1,pvals=trans_mat[state]))[0][0]
-        data[i].append(np.nonzero(np.random.multinomial(n=1,pvals=obs_mat[state]))[0][0])
-        states[i].append(state)
-    return [zip(d,s) for d in data for s in states]
+        state      = np.nonzero(np.random.multinomial(n=1,pvals=trans_mat[state]))[0][0]
+        data[i][t] = np.nonzero(np.random.multinomial(n=1,pvals=obs_mat[state]))[0][0]
+        states[i][t] = state
+    return data, states
