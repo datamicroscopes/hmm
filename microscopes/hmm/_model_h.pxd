@@ -16,3 +16,4 @@ cdef extern from "microscopes/hmm/model.hpp" namespace "microscopes::hmm":
           const vector[vector[size_t]])
 
     void sample_beam(rng_t &)
+    size_t nstates()

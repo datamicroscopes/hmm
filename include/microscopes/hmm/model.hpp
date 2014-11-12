@@ -40,6 +40,7 @@ namespace hmm{
         float alpha0,
         const std::vector<float> &H,
         const std::vector<std::vector<size_t> > &data):
+      defn_(defn),
       data_(data),
       s_(data.size()),
       u_(data.size()),
@@ -78,11 +79,14 @@ namespace hmm{
       clear_empty_states();
       sample_beta(rng);
     }
+
+    inline size_t nstates() { return K; }
   protected:
 
     // parameters
 
     // these three all have the same shape as the data
+    const model_definition defn_;
     const std::vector<std::vector <size_t> > data_; // XXX: For now, the observation type is just a vector of vectors of ints. Later we can switch over to using recarrays
     std::vector<std::vector<size_t> > s_; // the state sequence
     std::vector<std::vector<float> > u_; // the slice sampling parameter for each time step in the series
@@ -96,7 +100,7 @@ namespace hmm{
 
     // shape is the number of states currently instantiated, roughtly
     std::vector<float> beta_; // the stick lengths for the top-level DP draw. Size K+1.
-    std::vector<bool> state_visited_;
+    std::vector<bool> state_visited_; // Size K
 
     // hyperparameters
     float gamma_;
