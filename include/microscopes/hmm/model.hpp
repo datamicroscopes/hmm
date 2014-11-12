@@ -81,6 +81,15 @@ namespace hmm{
     }
 
     inline size_t nstates() { return K; }
+
+    inline void print_pi() {
+      for (size_t i = 0; i < K; i++) {
+        for (size_t j = 0; j < K+1; j++) {
+          printf("(%d,%d): %1.4f\t",i,j,pi_(i,j));
+        }
+        printf("\n");
+      }
+    }
   protected:
 
     // parameters
@@ -183,6 +192,7 @@ namespace hmm{
         }
       }
 
+      print_pi();
       // If necessary, break the pi stick some more
       while (max_pi > min_u) {
         // Add new state
@@ -191,6 +201,15 @@ namespace hmm{
 
         phi_.conservativeResize(K+1,N);
         phi_counts_.conservativeResize(K+1,N);
+
+        for (size_t i = 0; i < K+1; i++) { // Set new counts to zero
+          pi_counts_(i,K) = 0;
+          pi_counts_(K,i) = 0;
+        }
+
+        for (size_t i = 0; i < N; i++) {
+          phi_counts_(K,i) = 0;
+        }
 
         sample_pi_row(rng, K);
         sample_phi_row(rng, K);
@@ -208,10 +227,14 @@ namespace hmm{
           float pk = distributions::sample_beta(rng, alpha0_ * beta_[K], alpha0_ * beta_[K+1]);
           pi_(i,K)   = pu * pk;
           pi_(i,K+1) = pu * (1-pk);
+          if (std::isnan(pi_(i,K)) && !std::isnan(pu)) {
+            std::cout << "nan: " << std::scientific << alpha0_ * beta_[K] << " or " << alpha0_ * beta_[K+1] << std::endl;
+          }
           max_pi = max_pi > pi_(i,K)   ? max_pi : pi_(i,K);
           max_pi = max_pi > pi_(i,K+1) ? max_pi : pi_(i,K+1);
         }
         K++;
+        print_pi();
       }
     }
 
@@ -253,11 +276,13 @@ namespace hmm{
         float alphas[K+1];
         for (size_t k = 0; k < K; k++) {
           alphas[k] = pi_counts_(i,k) + alpha0_ * beta_[k];
+          printf("(%d,%f,%f)",pi_counts_(i,k), alpha0_ * beta_[k], alphas[k]);
         }
         alphas[K] = alpha0_ * beta_[K];
+        printf("(%d,%f,%f)\n",0, alpha0_ * beta_[K], alphas[K]);
         distributions::sample_dirichlet(rng, K+1, alphas, new_pi);
-        for (size_t j = 0; j < K+1; j++) {
-          pi_(i,j) = new_pi[i];
+        for (size_t k = 0; k < K+1; k++) {
+          pi_(i,k) = new_pi[k];
         }
         max_pi = max_pi > new_pi[K] ? max_pi : new_pi[K];
     }
