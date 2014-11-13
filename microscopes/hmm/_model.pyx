@@ -1,4 +1,6 @@
 from microscopes.common import validator
+import numpy as np
+cimport numpy as np
 
 cdef class state:
     def __cinit__(self, model_definition defn, alpha=0.4, gamma=3.8, **kwargs):
@@ -19,3 +21,12 @@ cdef class state:
 
     def nstates(self):
       return self._thisptr.get()[0].nstates()
+
+    def trans_mat(self):
+      pass
+
+    def obs_mat(self):
+      pass
+
+    def joint_log_likelihood(self):
+      return self._thisptr.get()[0].joint_log_likelihood();
