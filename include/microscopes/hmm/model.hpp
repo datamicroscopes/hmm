@@ -18,6 +18,16 @@ namespace hmm{
   typedef Eigen::Matrix<size_t, Eigen::Dynamic, Eigen::Dynamic> MatrixXs;
   typedef Eigen::MatrixXf MatrixXf;
 
+  float sample_beta_robust(
+          distributions::rng_t & rng,
+          float alpha,
+          float beta) {
+      float x = distributions::sample_gamma(rng, alpha);
+      float y = distributions::sample_gamma(rng, beta);
+      if (x==0 && y==0) return distributions::sample_bernoulli(rng, alpha / (alpha + beta)) ? 1.0 : 0.0;
+      return x / (x + y);
+  }
+
   class model_definition {
   public:
     /**
@@ -83,12 +93,25 @@ namespace hmm{
     inline size_t nstates() { return K; }
 
     inline void print_pi() {
+      printf("Pi:\n");
       for (size_t i = 0; i < K; i++) {
         for (size_t j = 0; j < K+1; j++) {
-          printf("(%d,%d): %1.4f\t",i,j,pi_(i,j));
+          printf("%1.4f\t",pi_(i,j));
         }
         printf("\n");
       }
+      printf("\n");
+    }
+
+    inline void print_phi() {
+      printf("Phi:\n");
+      for (size_t i = 0; i < K; i++) {
+        for (size_t j = 0; j < N; j++) {
+          printf("%1.4f\t",phi_(i,j));
+        }
+        printf("\n");
+      }
+      printf("\n");
     }
   protected:
 
@@ -100,14 +123,14 @@ namespace hmm{
     std::vector<std::vector<size_t> > s_; // the state sequence
     std::vector<std::vector<float> > u_; // the slice sampling parameter for each time step in the series
 
-    // these three all have the same shape as the transition matrix, approximately
+    // same shape as the transition matrix, or plus one column
     MatrixXs pi_counts_; // the count of how many times a transition occurs between states. Size K x K.
     MatrixXf pi_; // the observed portion of the infinite transition matrix. Size K x K+1.
 
+    // same shape as the observation matrix
     MatrixXs phi_counts_; // count of how many times an observation is seen from a given state. Size K x N.
     MatrixXf phi_; // the emission matrix. Size K x N.
 
-    // shape is the number of states currently instantiated, roughtly
     std::vector<float> beta_; // the stick lengths for the top-level DP draw. Size K+1.
     std::vector<bool> state_visited_; // Size K
 
@@ -149,14 +172,25 @@ namespace hmm{
             }
             total_prob += probs(t,k);
           }
+          // printf("%d: ",t);
           for (size_t k = 0; k < K; k++) { // normalize to prevent numerical underflow
             probs(t,k) /= total_prob;
+            // printf("%1.4f\t",probs(t,k));
           }
+          // printf("\n");
         }
+        // printf("\n");
 
         // Backwards-sample
-        float * foo = probs.row(data_[i].size()-1).data();
-        s_[i][data_[i].size()-1] = distributions::sample_from_likelihoods(rng, std::vector<float>(foo, foo + K));
+        std::vector<float> likelihoods(K);
+        Eigen::Map<Eigen::VectorXf> mapl(&likelihoods[0], K);
+        mapl = probs.row(data_[i].size()-1);
+        // printf("%d: ",data_[i].size()-1);
+        // for (size_t a = 0; a < K; a++) {
+        //   printf("%1.4f ", likelihoods[a]);
+        // }
+        // printf("\n");
+        s_[i][data_[i].size()-1] = distributions::sample_from_likelihoods(rng, likelihoods);
         state_visited_[s_[i][data_[i].size()-1]] = true;
         phi_counts_(s_[i][data_[i].size()-1],data_[i][data_[i].size()-1])++;
         for (int t = data_[i].size()-1; t > 0; t--) {
@@ -165,8 +199,13 @@ namespace hmm{
               probs(t-1,k) = 0;
             }
           }
-          foo = probs.row(t-1).data();
-          s_[i][t-1] = distributions::sample_from_likelihoods(rng, std::vector<float>(foo, foo + K));
+          mapl = probs.row(t-1);
+          // printf("%d: ",t-1);
+          // for (size_t a = 0; a < K; a++) {
+          //   printf("%1.4f,%1.4f ", likelihoods[a], probs(t-1,a));
+          // }
+          // printf("\n");
+          s_[i][t-1] = distributions::sample_from_likelihoods(rng, likelihoods);
           // Update counts
           state_visited_[s_[i][t-1]] = true;
           pi_counts_(s_[i][t-1],s_[i][t])++;
@@ -187,12 +226,13 @@ namespace hmm{
           } else {
             prev_state = s_[i][j-1];
           }
-          u_[i][j] =  sampler(rng) / (pi_(prev_state,s_[i][j])); // scale the uniform sample to be between 0 and pi_{s_{t-1}s_t}
+          u_[i][j] =  sampler(rng) * (pi_(prev_state,s_[i][j])); // scale the uniform sample to be between 0 and pi_{s_{t-1}s_t}
           min_u = min_u < u_[i][j] ? min_u : u_[i][j];
         }
       }
 
-      print_pi();
+      // print_pi();
+      // print_phi();
       // If necessary, break the pi stick some more
       while (max_pi > min_u) {
         // Add new state
@@ -216,7 +256,7 @@ namespace hmm{
 
         // Break beta stick
         float bu = beta_[K];
-        float bk = distributions::sample_beta(rng, 1.0, gamma_);
+        float bk = sample_beta_robust(rng, 1.0, gamma_);
         beta_[K] = bu * bk;
         beta_.push_back(bu * (1-bk));
 
@@ -224,17 +264,18 @@ namespace hmm{
         max_pi = 0.0;
         for (size_t i = 0; i < K+1; i++) {
           float pu = pi_(i,K);
-          float pk = distributions::sample_beta(rng, alpha0_ * beta_[K], alpha0_ * beta_[K+1]);
+          float pk = sample_beta_robust(rng, alpha0_ * beta_[K], alpha0_ * beta_[K+1]);
           pi_(i,K)   = pu * pk;
           pi_(i,K+1) = pu * (1-pk);
-          if (std::isnan(pi_(i,K)) && !std::isnan(pu)) {
-            std::cout << "nan: " << std::scientific << alpha0_ * beta_[K] << " or " << alpha0_ * beta_[K+1] << std::endl;
-          }
+          // if (std::isnan(pi_(i,K)) && !std::isnan(pu)) {
+          //  std::cout << "nan: " << std::scientific << alpha0_ * beta_[K] << " or " << alpha0_ * beta_[K+1] << std::endl;
+          // }
           max_pi = max_pi > pi_(i,K)   ? max_pi : pi_(i,K);
           max_pi = max_pi > pi_(i,K+1) ? max_pi : pi_(i,K+1);
         }
         K++;
-        print_pi();
+        // print_pi();
+        // print_phi();
       }
     }
 
@@ -276,10 +317,10 @@ namespace hmm{
         float alphas[K+1];
         for (size_t k = 0; k < K; k++) {
           alphas[k] = pi_counts_(i,k) + alpha0_ * beta_[k];
-          printf("(%d,%f,%f)",pi_counts_(i,k), alpha0_ * beta_[k], alphas[k]);
+          // printf("(%d,%f,%f)",pi_counts_(i,k), alpha0_ * beta_[k], alphas[k]);
         }
         alphas[K] = alpha0_ * beta_[K];
-        printf("(%d,%f,%f)\n",0, alpha0_ * beta_[K], alphas[K]);
+        // printf("(%d,%f,%f)\n",0, alpha0_ * beta_[K], alphas[K]);
         distributions::sample_dirichlet(rng, K+1, alphas, new_pi);
         for (size_t k = 0; k < K+1; k++) {
           pi_(i,k) = new_pi[k];
