@@ -64,10 +64,9 @@ namespace hmm{
       alpha0_(alpha0),
       H_(H),
       memoized_log_stirling_(),
-      K(1),
-      N(defn.N())
+      K(1)
     {
-      MICROSCOPES_DCHECK(H.size() == N, "Number of hyperparameters must match vocabulary size.");
+      MICROSCOPES_DCHECK(H.size() == defn_.N(), "Number of hyperparameters must match vocabulary size.");
       beta_[0] = 0.5;
       beta_[1] = 0.5; // simple initialization
       state_visited_[0] = true;
@@ -88,11 +87,12 @@ namespace hmm{
       sample_s(rng);
       clear_empty_states();
       sample_beta(rng);
-      // std::cout << "Pi:\n" << pi_ << std::endl;
-      // std::cout << "Phi:\n" << phi_ << std::endl;
     }
 
+    inline void get_pi(float * f)  { Eigen::Map<MatrixXf>(f, K, K+1) = pi_; }
+    inline void get_phi(float * f) { Eigen::Map<MatrixXf>(f, K, defn_.N()) = phi_; }
     inline size_t nstates() { return K; }
+    inline size_t nobs() { return defn_.N(); }
 
     float joint_log_likelihood() {
       float logp = 0.0;
@@ -110,7 +110,7 @@ namespace hmm{
 
         float H_total = 0.0;
         float H_count_total = 0.0;
-        for (size_t n = 0; n < N; n++) { // emission probabilities
+        for (size_t n = 0; n < defn_.N(); n++) { // emission probabilities
           H_total       += H_[n];
           H_count_total += H_[n] + phi_counts_(k,n);
           logp += distributions::fast_lgamma(H_[n] + phi_counts_(k,n))
@@ -153,12 +153,11 @@ namespace hmm{
     //Should be smaller than the least value of the auxiliary variable, so all possible states visited by the beam sampler are instantiated
     float max_pi;
     size_t K;
-    const size_t N;
 
     // sampling functions. later we can integrate these into microscopes::kernels where appropriate.
     void sample_s(distributions::rng_t &rng) {
       pi_counts_ = MatrixXs::Zero(K,K); // clear counts
-      phi_counts_ = MatrixXs::Zero(K,N);
+      phi_counts_ = MatrixXs::Zero(K,defn_.N());
       state_visited_ = std::vector<bool>(K);
       for (size_t i = 0; i < data_.size(); i++) {
         // Forward-filter
@@ -231,15 +230,15 @@ namespace hmm{
         pi_.conservativeResize(K+1,K+2);
         pi_counts_.conservativeResize(K+1,K+1);
 
-        phi_.conservativeResize(K+1,N);
-        phi_counts_.conservativeResize(K+1,N);
+        phi_.conservativeResize(K+1,defn_.N());
+        phi_counts_.conservativeResize(K+1,defn_.N());
 
         for (size_t i = 0; i < K+1; i++) { // Set new counts to zero
           pi_counts_(i,K) = 0;
           pi_counts_(K,i) = 0;
         }
 
-        for (size_t i = 0; i < N; i++) {
+        for (size_t i = 0; i < defn_.N(); i++) {
           phi_counts_(K,i) = 0;
         }
 
@@ -320,13 +319,13 @@ namespace hmm{
     }
 
     void sample_phi_row(distributions::rng_t &rng, size_t k) {
-      float new_phi[N];
-      float alphas[N];
-      for (size_t n = 0; n < N; n++) {
+      float new_phi[defn_.N()];
+      float alphas[defn_.N()];
+      for (size_t n = 0; n < defn_.N(); n++) {
         alphas[n] = phi_counts_(k,n) + H_[n];
       }
-      distributions::sample_dirichlet(rng, N, alphas, new_phi);
-      for (size_t n = 0; n < N; n++) {
+      distributions::sample_dirichlet(rng, defn_.N(), alphas, new_phi);
+      for (size_t n = 0; n < defn_.N(); n++) {
         phi_(k,n) = new_phi[n];
       }
     }

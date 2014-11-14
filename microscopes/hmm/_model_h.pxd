@@ -17,4 +17,7 @@ cdef extern from "microscopes/hmm/model.hpp" namespace "microscopes::hmm":
 
     void sample_beam(rng_t &)
     size_t nstates()
+    size_t nobs()
+    void get_pi(float *)
+    void get_phi(float *)
     float joint_log_likelihood()
