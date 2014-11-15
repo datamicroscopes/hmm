@@ -9,6 +9,7 @@
 #include <vector>
 #include <map>
 #include <chrono>
+#include <cmath>
 
 #include <eigen3/Eigen/Dense>
 
@@ -89,7 +90,7 @@ namespace hmm{
       sample_beta(rng);
     }
 
-    inline void get_pi(float * f)  { Eigen::Map<MatrixXf>(f, K, K+1) = pi_; }
+    inline void get_pi(float * f)  { Eigen::Map<MatrixXf>(f, K, K+1)       = pi_; }
     inline void get_phi(float * f) { Eigen::Map<MatrixXf>(f, K, defn_.N()) = phi_; }
     inline size_t nstates() { return K; }
     inline size_t nobs() { return defn_.N(); }
@@ -243,6 +244,7 @@ namespace hmm{
         }
 
         sample_pi_row(rng, K);
+        MICROSCOPES_DCHECK(std::abs(1.0 - pi_.block(K,0,1,K).sum()) < 1e-5, "Transition matrix row does not sum to one");
         sample_phi_row(rng, K);
 
         // Break beta stick
@@ -251,7 +253,8 @@ namespace hmm{
         beta_[K] = bu * bk;
         beta_.push_back(bu * (1-bk));
 
-        // Add new transition to each state
+        // Add new column to transition matrix
+        // std::cout << "Before we add new column:\n" << pi_.block(0,0,K+1,K).rowwise().sum() << std::endl;
         max_pi = 0.0;
         for (size_t i = 0; i < K+1; i++) {
           float pu = pi_(i,K);
@@ -261,6 +264,7 @@ namespace hmm{
           max_pi = max_pi > pi_(i,K)   ? max_pi : pi_(i,K);
           max_pi = max_pi > pi_(i,K+1) ? max_pi : pi_(i,K+1);
         }
+        // std::cout << "After we add new column:\n" << pi_.rowwise().sum() << std::endl;
         K++;
       }
     }
@@ -277,6 +281,7 @@ namespace hmm{
           common::util::remove_row<float>(pi_, k);
           common::util::remove_row<size_t>(pi_counts_, k);
 
+          pi_.col(K) += pi_.col(k);
           common::util::remove_column<float>(pi_, k);
           common::util::remove_column<size_t>(pi_counts_, k);
 
