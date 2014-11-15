@@ -92,8 +92,8 @@ namespace hmm{
 
     inline void get_pi(float * f)  { Eigen::Map<MatrixXf>(f, K, K+1)       = pi_; }
     inline void get_phi(float * f) { Eigen::Map<MatrixXf>(f, K, defn_.N()) = phi_; }
-    inline size_t nstates() { return K; }
-    inline size_t nobs() { return defn_.N(); }
+    inline size_t nstates()        { return K; }
+    inline size_t nobs()           { return defn_.N(); }
 
     float joint_log_likelihood() {
       float logp = 0.0;
@@ -163,16 +163,17 @@ namespace hmm{
       for (size_t i = 0; i < data_.size(); i++) {
         // Forward-filter
         MatrixXf probs(data_[i].size(),K);
+        bool hasnan = false;
         for (size_t t = 0; t < data_[i].size(); t++) {
           float total_prob = 0.0;
           for (size_t k = 0; k < K; k++) {
             if (t == 0) {
-              probs(t,k) = phi_(k,data_[i][t]) * (u_[i][t] < pi_(0,k) ? 1.0 : 0.0);
+              probs(t,k) = phi_(k,data_[i][t]) * (u_[i][t] <= pi_(0,k) ? 1.0 : 0.0);
             }
             else {
               probs(t,k) = 0.0;
               for (size_t l = 0; l < K; l++) {
-                if (u_[i][t] < pi_(l,k)) {
+                if (u_[i][t] <= pi_(l,k)) {
                   probs(t,k) += probs(t-1,l);
                 }
               }
@@ -182,6 +183,15 @@ namespace hmm{
           }
           for (size_t k = 0; k < K; k++) { // normalize to prevent numerical underflow
             probs(t,k) /= total_prob;
+            if (!hasnan && std::isnan(probs(t,k))) {
+              hasnan = true;
+              std::cout << "NaN on row " << t << std::endl;
+              std::cout << probs.row(t-1) << std::endl;
+              std::cout << "Pi:\n" << pi_ << std::endl;
+              std::cout << "u:\n" << u_[i][t] << std::endl;
+              std::cout << "s_t:\n" << s_[i][t] << std::endl;
+              std::cout << "s_t-1:\n" << s_[i][t-1] << std::endl;
+            }
           }
         }
 
@@ -220,7 +230,11 @@ namespace hmm{
           } else {
             prev_state = s_[i][j-1];
           }
-          u_[i][j] =  sampler(rng) * (pi_(prev_state,s_[i][j])); // scale the uniform sample to be between 0 and pi_{s_{t-1}s_t}
+          float foo = sampler(rng);
+          if (j == 1168) {
+            std::cout << foo << std::endl;
+          }
+          u_[i][j] =  foo * (pi_(prev_state,s_[i][j])); // scale the uniform sample to be between 0 and pi_{s_{t-1}s_t}
           min_u = min_u < u_[i][j] ? min_u : u_[i][j];
         }
       }
