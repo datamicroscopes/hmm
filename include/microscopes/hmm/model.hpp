@@ -180,6 +180,7 @@ namespace hmm{
             }
             total_prob += probs(t,k);
           }
+          MICROSCOPES_DCHECK(total_prob > 0.0, "Zero total probability");
           for (size_t k = 0; k < K; k++) { // normalize to prevent numerical underflow
             probs(t,k) /= total_prob;
           }
@@ -335,9 +336,7 @@ namespace hmm{
       }
     }
 
-    void sample_beta(distributions::rng_t &rng) {
-      // sample auxiliary variable
-      MatrixXs m_ = MatrixXs::Zero(K, K);
+    void sample_aux_proper(distributions::rng_t &rng, MatrixXs &m_) {
       for (size_t i = 0; i < K; i++) {
         for (size_t j = 0; j < K; j++) {
           size_t n_ij = pi_counts_(i,j);
@@ -356,18 +355,44 @@ namespace hmm{
           }
         }
       }
+    }
+
+    void sample_aux_simple(distributions::rng_t &rng, MatrixXs &m_) {
+      // A direct refactoring of the approach to resampling beta in Jurgen
+      // van Gael's MATLAB code, to check if subtle differences between our
+      // implementations are due to differences there.
+      std::uniform_real_distribution<float> sampler (0.0, 1.0);
+      for (size_t i = 0; i < K; i++) {
+        for (size_t j = 0; j < K; j++) {
+          size_t n_ij = pi_counts_(i,j)
+          if (n_ij > 0) {
+            for (size_t l = 0; l < n_ij; l++) {
+              if (sampler(rng) < (alpha0_ + beta_[j]) / (alpha0_ + beta_[j] + l))
+              {
+                m_(i,j)++;
+              }
+            }
+          }
+        }
+      }
+    }
+
+    void sample_beta(distributions::rng_t &rng) {
+      // sample auxiliary variable
+      MatrixXs m_ = MatrixXs::Zero(K, K);
+      sample_aux_proper(rng, m_);
 
       float alphas[K+1];
       float new_beta[K+1];
-      MatrixXs m_sum = m_.rowwise().sum();
+
+      MatrixXs m_sum = m_.colwise().sum();
       for (size_t k = 0; k < K; k++) {
         alphas[k] = m_sum(k);
       }
       alphas[K] = gamma_;
+
       distributions::sample_dirichlet(rng, K+1, alphas, new_beta);
-      for (size_t k = 0; k <= K; k++) {
-        beta_[k] = new_beta[k];
-      }
+      beta_.assign(new_beta, new_beta + K+1);
     }
   };
 
