@@ -92,7 +92,6 @@ namespace hmm{
       gamma_(gamma),
       alpha0_(alpha0),
       H_(H),
-      memoized_log_stirling_(),
       K(1)
     {
       MICROSCOPES_DCHECK(H.size() == defn_.N(), "Number of hyperparameters must match vocabulary size.");
@@ -177,7 +176,6 @@ namespace hmm{
     const std::vector<float> H_; // hyperparameters for a Dirichlet prior over observations. Will generalize this to other observation models later.
 
     // helper fields
-    std::map<size_t, std::vector<float> > memoized_log_stirling_; // memoize computation of log stirling numbers for speed when sampling m
     // Over all instantiated states, the maximum value of the part of pi_k that belongs to the "unseen" states.
     //Should be smaller than the least value of the auxiliary variable, so all possible states visited by the beam sampler are instantiated
     float max_pi;
@@ -372,31 +370,9 @@ namespace hmm{
       }
     }
 
-    void sample_aux_proper(distributions::rng_t &rng, MatrixXs &m_) {
-      for (size_t i = 0; i < K; i++) {
-        for (size_t j = 0; j < K; j++) {
-          size_t n_ij = pi_counts_(i,j);
-          if (n_ij > 0) {
-            if (!memoized_log_stirling_.count(n_ij)) {
-              memoized_log_stirling_[n_ij] = distributions::log_stirling1_row(n_ij);
-            }
-
-            std::vector<float> stirling_row = memoized_log_stirling_[n_ij];
-
-            std::vector<float> scores(n_ij);
-            for (size_t m = 0; m < n_ij; m++) {
-              scores[m] = stirling_row[m+1] + (m+1) * ( log( alpha0_ ) + log( beta_[j] ) );
-            }
-            m_(i,j) = distributions::sample_from_scores_overwrite(rng, scores) + 1;
-          }
-        }
-      }
-    }
-
-    void sample_aux_simple(distributions::rng_t &rng, MatrixXs &m_) {
-      // A direct refactoring of the approach to resampling beta in Jurgen
-      // van Gael's MATLAB code, to check if subtle differences between our
-      // implementations are due to differences there.
+    void sample_beta(distributions::rng_t &rng) {
+      // sample auxiliary variable
+      MatrixXs m_ = MatrixXs::Zero(K, K);
       std::uniform_real_distribution<float> sampler (0.0, 1.0);
       for (size_t i = 0; i < K; i++) {
         for (size_t j = 0; j < K; j++) {
@@ -411,12 +387,6 @@ namespace hmm{
           }
         }
       }
-    }
-
-    void sample_beta(distributions::rng_t &rng) {
-      // sample auxiliary variable
-      MatrixXs m_ = MatrixXs::Zero(K, K);
-      sample_aux_simple(rng, m_);
 
       float alphas[K+1];
       float new_beta[K+1];
