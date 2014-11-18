@@ -29,6 +29,34 @@ namespace hmm{
       return x / (x + y);
   }
 
+  template<class Alloc>
+  inline size_t sample_from_likelihoods(
+          distributions::rng_t & rng,
+          const std::vector<float, Alloc> & likelihoods,
+          float total_likelihood) {
+      const size_t size = likelihoods.size();
+      DIST_ASSERT_LT(0, size);
+
+      float t = total_likelihood * distributions::sample_unif01(rng);
+
+      for (size_t i = 0; DIST_LIKELY(i < size); ++i) {
+          t -= likelihoods[i];
+          if (DIST_UNLIKELY(t <= 0)) {
+              return i;
+          }
+      }
+
+      return size - 1;
+  }
+
+  template<class Alloc>
+  inline size_t sample_from_likelihoods(
+          distributions::rng_t & rng,
+          const std::vector<float, Alloc> & likelihoods) {
+      float total = distributions::vector_sum(likelihoods.size(), likelihoods.data());
+      return sample_from_likelihoods(rng, likelihoods, total);
+  }
+
   class model_definition {
   public:
     /**
@@ -81,11 +109,11 @@ namespace hmm{
       }
     }
 
-    void sample_beam(distributions::rng_t &rng) {
+    void sample_beam(distributions::rng_t &rng, bool verbose) {
       sample_pi(rng);
       sample_phi(rng);
       sample_u(rng);
-      sample_s(rng);
+      sample_s(rng,verbose);
       clear_empty_states();
       sample_beta(rng);
     }
@@ -156,7 +184,7 @@ namespace hmm{
     size_t K;
 
     // sampling functions. later we can integrate these into microscopes::kernels where appropriate.
-    void sample_s(distributions::rng_t &rng) {
+    void sample_s(distributions::rng_t &rng, bool verbose) {
       pi_counts_ = MatrixXs::Zero(K,K); // clear counts
       phi_counts_ = MatrixXs::Zero(K,defn_.N());
       state_visited_ = std::vector<bool>(K);
@@ -184,6 +212,14 @@ namespace hmm{
           for (size_t k = 0; k < K; k++) { // normalize to prevent numerical underflow
             probs(t,k) /= total_prob;
           }
+          if (verbose) {
+            std::cout << "Forward " << t << ": [";
+            for (size_t k = 0; k < K; k++) {
+              std::cout << probs(t,k);
+              if (k < K-1) std::cout << ", ";
+            }
+            std::cout << "]" << std::endl;
+          }
         }
 
         // Backwards-sample
@@ -195,12 +231,14 @@ namespace hmm{
         phi_counts_(s_[i][data_[i].size()-1],data_[i][data_[i].size()-1])++;
         for (int t = data_[i].size()-1; t > 0; t--) {
           for (size_t k = 0; k < K; k++) {
+            // if (verbose) std::cout << "u: " << u_[i][t] << ", pi: " << pi_(k,s_[i][t]) << std::endl;
             if (u_[i][t] >= pi_(k,s_[i][t])) {
               probs(t-1,k) = 0;
             }
           }
           mapl = probs.row(t-1);
-          s_[i][t-1] = distributions::sample_from_likelihoods(rng, likelihoods);
+          if (verbose) std::cout << "Backward " << t-1 << ": " << likelihoods << std::endl;
+          s_[i][t-1] = sample_from_likelihoods(rng, likelihoods);
           // Update counts
           state_visited_[s_[i][t-1]] = true;
           pi_counts_(s_[i][t-1],s_[i][t])++;
@@ -255,7 +293,6 @@ namespace hmm{
         beta_.push_back(bu * (1-bk));
 
         // Add new column to transition matrix
-        // std::cout << "Before we add new column:\n" << pi_.block(0,0,K+1,K).rowwise().sum() << std::endl;
         max_pi = 0.0;
         for (size_t i = 0; i < K+1; i++) {
           float pu = pi_(i,K);
@@ -265,7 +302,6 @@ namespace hmm{
           max_pi = max_pi > pi_(i,K)   ? max_pi : pi_(i,K);
           max_pi = max_pi > pi_(i,K+1) ? max_pi : pi_(i,K+1);
         }
-        // std::cout << "After we add new column:\n" << pi_.rowwise().sum() << std::endl;
         K++;
       }
     }
@@ -364,7 +400,7 @@ namespace hmm{
       std::uniform_real_distribution<float> sampler (0.0, 1.0);
       for (size_t i = 0; i < K; i++) {
         for (size_t j = 0; j < K; j++) {
-          size_t n_ij = pi_counts_(i,j)
+          size_t n_ij = pi_counts_(i,j);
           if (n_ij > 0) {
             for (size_t l = 0; l < n_ij; l++) {
               if (sampler(rng) < (alpha0_ + beta_[j]) / (alpha0_ + beta_[j] + l))
@@ -380,7 +416,7 @@ namespace hmm{
     void sample_beta(distributions::rng_t &rng) {
       // sample auxiliary variable
       MatrixXs m_ = MatrixXs::Zero(K, K);
-      sample_aux_proper(rng, m_);
+      sample_aux_simple(rng, m_);
 
       float alphas[K+1];
       float new_beta[K+1];

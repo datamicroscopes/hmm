@@ -1,5 +1,6 @@
 from libcpp.vector cimport vector
 from libc.stddef cimport size_t
+from libcpp cimport bool
 
 from microscopes.common._random_fwd_h cimport rng_t
 
@@ -15,7 +16,7 @@ cdef extern from "microscopes/hmm/model.hpp" namespace "microscopes::hmm":
           const vector[float] &,
           const vector[vector[size_t]])
 
-    void sample_beam(rng_t &)
+    void sample_beam(rng_t &, bool)
     size_t nstates()
     size_t nobs()
     void get_pi(float *)

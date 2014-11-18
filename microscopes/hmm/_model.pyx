@@ -16,8 +16,8 @@ cdef class state:
         self._thisptr.reset(new c_state(defn._thisptr.get()[0], gamma, alpha, H, c_data))
 
     # This will be moved to runner, but just test it here for now
-    def sample(self, rng r):
-      self._thisptr.get()[0].sample_beam(r._thisptr[0])
+    def sample(self, rng r, verbose=False):
+      self._thisptr.get()[0].sample_beam(r._thisptr[0], verbose)
 
     def nstates(self):
       return self._thisptr.get()[0].nstates()
