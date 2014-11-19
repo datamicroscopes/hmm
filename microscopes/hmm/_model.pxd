@@ -4,6 +4,7 @@ from microscopes.hmm._model_h cimport state as c_state
 from microscopes.hmm.definition cimport model_definition
 from microscopes.common._rng cimport rng
 
+from libcpp cimport bool
 from libcpp.vector cimport vector
 from libcpp.stddef import size_t
 from libc.stdlib cimport malloc, free

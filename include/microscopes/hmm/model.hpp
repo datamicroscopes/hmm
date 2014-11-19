@@ -19,43 +19,43 @@ namespace hmm{
   typedef Eigen::Matrix<size_t, Eigen::Dynamic, Eigen::Dynamic> MatrixXs;
   typedef Eigen::MatrixXf MatrixXf;
 
-  float sample_beta_robust(
-          distributions::rng_t & rng,
-          float alpha,
-          float beta) {
-      float x = distributions::sample_gamma(rng, alpha);
-      float y = distributions::sample_gamma(rng, beta);
-      if (x==0 && y==0) return distributions::sample_bernoulli(rng, alpha / (alpha + beta)) ? 1.0 : 0.0;
-      return x / (x + y);
-  }
+  // float sample_beta_robust(
+  //         distributions::rng_t & rng,
+  //         float alpha,
+  //         float beta) {
+  //     float x = distributions::sample_gamma(rng, alpha);
+  //     float y = distributions::sample_gamma(rng, beta);
+  //     if (x==0 && y==0) return distributions::sample_bernoulli(rng, alpha / (alpha + beta)) ? 1.0 : 0.0;
+  //     return x / (x + y);
+  // }
 
-  template<class Alloc>
-  inline size_t sample_from_likelihoods(
-          distributions::rng_t & rng,
-          const std::vector<float, Alloc> & likelihoods,
-          float total_likelihood) {
-      const size_t size = likelihoods.size();
-      DIST_ASSERT_LT(0, size);
+  // template<class Alloc>
+  // inline size_t sample_from_likelihoods(
+  //         distributions::rng_t & rng,
+  //         const std::vector<float, Alloc> & likelihoods,
+  //         float total_likelihood) {
+  //     const size_t size = likelihoods.size();
+  //     DIST_ASSERT_LT(0, size);
 
-      float t = total_likelihood * distributions::sample_unif01(rng);
+  //     float t = total_likelihood * distributions::sample_unif01(rng);
 
-      for (size_t i = 0; DIST_LIKELY(i < size); ++i) {
-          t -= likelihoods[i];
-          if (DIST_UNLIKELY(t <= 0)) {
-              return i;
-          }
-      }
+  //     for (size_t i = 0; DIST_LIKELY(i < size); ++i) {
+  //         t -= likelihoods[i];
+  //         if (DIST_UNLIKELY(t <= 0)) {
+  //             return i;
+  //         }
+  //     }
 
-      return size - 1;
-  }
+  //     return size - 1;
+  // }
 
-  template<class Alloc>
-  inline size_t sample_from_likelihoods(
-          distributions::rng_t & rng,
-          const std::vector<float, Alloc> & likelihoods) {
-      float total = distributions::vector_sum(likelihoods.size(), likelihoods.data());
-      return sample_from_likelihoods(rng, likelihoods, total);
-  }
+  // template<class Alloc>
+  // inline size_t sample_from_likelihoods(
+  //         distributions::rng_t & rng,
+  //         const std::vector<float, Alloc> & likelihoods) {
+  //     float total = distributions::vector_sum(likelihoods.size(), likelihoods.data());
+  //     return sample_from_likelihoods(rng, likelihoods, total);
+  // }
 
   class model_definition {
   public:
@@ -74,11 +74,19 @@ namespace hmm{
 // Implementation of the beam sampler for the HDP-HMM, following van Gael 2008
   class state {
   public:
+    template <class... Args>
+    static inline std::shared_ptr<state>
+    initialize(Args &&... args)
+    {
+      return std::make_shared<state>(std::forward<Args>(args)...);
+    }
+
     state(const model_definition &defn,
         float gamma,
         float alpha0,
         const std::vector<float> &H,
-        const std::vector<std::vector<size_t> > &data):
+        const std::vector<std::vector<size_t> > &data,
+        const distributions::rng_t &rng):
       defn_(defn),
       data_(data),
       s_(data.size()),
@@ -92,29 +100,91 @@ namespace hmm{
       gamma_(gamma),
       alpha0_(alpha0),
       H_(H),
+      gamma_flag_(false),
+      alpha0_flag_(false),
       K(1)
     {
-      MICROSCOPES_DCHECK(H.size() == defn_.N(), "Number of hyperparameters must match vocabulary size.");
-      beta_[0] = 0.5;
-      beta_[1] = 0.5; // simple initialization
-      state_visited_[0] = true;
-      for (size_t i = 0; i < data.size(); i++) {
-        s_[i] = std::vector<size_t>(data[i].size());
-        u_[i] = std::vector<float>(data[i].size());
-        for (size_t j = 0; j < data[i].size(); j++) {
-          pi_counts_(0,0)++;
-          phi_counts_(0,data[i][j])++;
-        }
+      init(H, rng);
+    }
+
+    state(const model_definition &defn,
+        bool gamma_flag,
+        float hyper_a,
+        float hyper_b,
+        float other_hyper,
+        const std::vector<float> &H,
+        const std::vector<std::vector<size_t> > &data,
+        const distributions::rng_t &rng):
+      defn_(defn),
+      data_(data),
+      s_(data.size()),
+      u_(data.size()),
+      pi_counts_(MatrixXs::Zero(1,1)),
+      pi_(1,2),
+      phi_counts_(MatrixXs::Zero(1,H.size())),
+      phi_(1,H.size()),
+      beta_(2),
+      state_visited_(1),
+      gamma_(gamma),
+      alpha0_(alpha0),
+      H_(H),
+      gamma_flag_(gamma_flag),
+      alpha0_flag_(!gamma_flag),
+      K(1)
+    {
+      if (gamma_flag) {
+        hyper_gamma_a_ = hyper_a;
+        hyper_gamma_b_ = hyper_b;
+        alpha0_ = other_hyper;
+      } else {
+        hyper_alpha_a_ = hyper_a;
+        hyper_alpha_b_ = hyper_b;
+        gamma_  = other_hyper;
       }
+      init(H, rng);
+    }
+
+    state(const model_definition &defn,
+        float hyper_gamma_a,
+        float hyper_gamma_b,
+        float hyper_alpha_a,
+        float hyper_alpha_b,
+        const std::vector<float> &H,
+        const std::vector<std::vector<size_t> > &data,
+        const distributions::rng_t &rng):
+      defn_(defn),
+      data_(data),
+      s_(data.size()),
+      u_(data.size()),
+      pi_counts_(MatrixXs::Zero(1,1)),
+      pi_(1,2),
+      phi_counts_(MatrixXs::Zero(1,H.size())),
+      phi_(1,H.size()),
+      beta_(2),
+      state_visited_(1),
+      gamma_(gamma),
+      alpha0_(alpha0),
+      H_(H),
+      gamma_flag_(true),
+      alpha0_flag_(true),
+      hyper_gamma_a_(hyper_gamma_a),
+      hyper_gamma_b_(hyper_gamma_b),
+      hyper_alpha_a_(hyper_alpha_a),
+      hyper_alpha_b_(hyper_alpha_b),
+      K(1)
+    {
+      init(H, rng);
     }
 
     void sample_beam(distributions::rng_t &rng, bool verbose) {
-      sample_pi(rng);
-      sample_phi(rng);
       sample_u(rng);
       sample_s(rng,verbose);
       clear_empty_states();
       sample_beta(rng);
+      if (gamma_flag_)  sample_gamma(rng);
+      if (alpha0_flag_) sample_alpha0(rng);
+      sample_pi(rng);
+      sample_phi(rng);
     }
 
     inline void get_pi(float * f)  { Eigen::Map<MatrixXf>(f, K, K+1)       = pi_; }
@@ -175,11 +245,41 @@ namespace hmm{
     float alpha0_;
     const std::vector<float> H_; // hyperparameters for a Dirichlet prior over observations. Will generalize this to other observation models later.
 
+    // If true, resample the hyperparameter in each loop
+    bool gamma_flag_, alpha0_flag_; 
+    // Only assigned values if the corresponding flag is true
+    float hyper_gamma_a_, hyper_gamma_b_,
+          hyper_alpha_a_, hyper_alpha_b_;
+
     // helper fields
     // Over all instantiated states, the maximum value of the part of pi_k that belongs to the "unseen" states.
     //Should be smaller than the least value of the auxiliary variable, so all possible states visited by the beam sampler are instantiated
     float max_pi;
     size_t K;
+
+    // Shared across the different constructors. 
+    // Different calling conventions are just to distinguish different flags about sampling hyperparameters
+    void init(const std::vector<float> &H, const distributions::rng_t &rng) {
+      MICROSCOPES_DCHECK(H.size() == defn_.N(), "Number of hyperparameters must match vocabulary size.");
+      // sample hyperparameters from prior
+      if (gamma_flag_)  
+        gamma_  = distributions::sample_gamma(rng, hyper_gamma_a_, hyper_gamma_b_); 
+      if (alpha0_flag_) 
+        alpha0_ = distributions::sample_gamma(rng, hyper_alpha_a_, hyper_alpha_b_);
+      beta_[0] = 0.5;
+      beta_[1] = 0.5; // simple initialization
+      state_visited_[0] = true;
+      for (size_t i = 0; i < data_.size(); i++) {
+        s_[i] = std::vector<size_t>(data_[i].size());
+        u_[i] = std::vector<float>(data_[i].size());
+        pi_counts_(0,0) += data_[i].size();
+        for (size_t j = 0; j < data_[i].size(); j++) {
+          phi_counts_(0,data[i][j])++;
+        }
+      }
+      sample_pi(rng);
+      sample_phi(rng);
+    }
 
     // sampling functions. later we can integrate these into microscopes::kernels where appropriate.
     void sample_s(distributions::rng_t &rng, bool verbose) {
@@ -236,7 +336,7 @@ namespace hmm{
           }
           mapl = probs.row(t-1);
           if (verbose) std::cout << "Backward " << t-1 << ": " << likelihoods << std::endl;
-          s_[i][t-1] = sample_from_likelihoods(rng, likelihoods);
+          s_[i][t-1] = distributions::sample_from_likelihoods(rng, likelihoods);
           // Update counts
           state_visited_[s_[i][t-1]] = true;
           pi_counts_(s_[i][t-1],s_[i][t])++;
@@ -286,7 +386,7 @@ namespace hmm{
 
         // Break beta stick
         float bu = beta_[K];
-        float bk = sample_beta_robust(rng, 1.0, gamma_);
+        float bk = distributions::sample_beta(rng, 1.0, gamma_);
         beta_[K] = bu * bk;
         beta_.push_back(bu * (1-bk));
 
@@ -294,7 +394,7 @@ namespace hmm{
         max_pi = 0.0;
         for (size_t i = 0; i < K+1; i++) {
           float pu = pi_(i,K);
-          float pk = sample_beta_robust(rng, alpha0_ * beta_[K], alpha0_ * beta_[K+1]);
+          float pk = distributions::sample_beta(rng, alpha0_ * beta_[K], alpha0_ * beta_[K+1]);
           pi_(i,K)   = pu * pk;
           pi_(i,K+1) = pu * (1-pk);
           max_pi = max_pi > pi_(i,K)   ? max_pi : pi_(i,K);
@@ -399,6 +499,14 @@ namespace hmm{
 
       distributions::sample_dirichlet(rng, K+1, alphas, new_beta);
       beta_.assign(new_beta, new_beta + K+1);
+    }
+
+    void sample_gamma(distributions::rngt_t &rng) {
+
+    }
+
+    void sample_alpha0(distributions::rng_t &rng) {
+
     }
   };
 
