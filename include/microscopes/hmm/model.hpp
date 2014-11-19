@@ -181,8 +181,8 @@ namespace hmm{
       sample_s(rng,verbose);
       clear_empty_states();
       sample_beta(rng);
-      if (gamma_flag_)  sample_gamma(rng);
-      if (alpha0_flag_) sample_alpha0(rng);
+      if (gamma_flag_)  sample_gamma(rng, 20);
+      if (alpha0_flag_) sample_alpha0(rng, 20);
       sample_pi(rng);
       sample_phi(rng);
     }
@@ -263,9 +263,9 @@ namespace hmm{
       MICROSCOPES_DCHECK(H.size() == defn_.N(), "Number of hyperparameters must match vocabulary size.");
       // sample hyperparameters from prior
       if (gamma_flag_)  
-        gamma_  = distributions::sample_gamma(rng, hyper_gamma_a_, hyper_gamma_b_); 
+        gamma_  = distributions::sample_gamma(rng, hyper_gamma_a_, 1.0 / hyper_gamma_b_); 
       if (alpha0_flag_) 
-        alpha0_ = distributions::sample_gamma(rng, hyper_alpha_a_, hyper_alpha_b_);
+        alpha0_ = distributions::sample_gamma(rng, hyper_alpha_a_, 1.0 / hyper_alpha_b_);
       beta_[0] = 0.5;
       beta_[1] = 0.5; // simple initialization
       state_visited_[0] = true;
@@ -470,7 +470,7 @@ namespace hmm{
       }
     }
 
-    void sample_beta(distributions::rng_t &rng) {
+    void sample_hypers(distributions::rng_t &rng) {
       // sample auxiliary variable
       MatrixXs m_ = MatrixXs::Zero(K, K);
       std::uniform_real_distribution<float> sampler (0.0, 1.0);
@@ -499,14 +499,33 @@ namespace hmm{
 
       distributions::sample_dirichlet(rng, K+1, alphas, new_beta);
       beta_.assign(new_beta, new_beta + K+1);
+
+      if (gamma_flag_)
+        sample_gamma(rng, m_, 20);
+      if (alpha0_flag_)
+        sample_alpha0(rng, m_.sum(), 20);
     }
 
-    void sample_gamma(distributions::rngt_t &rng) {
+    void sample_gamma(distributions::rngt_t &rng, MatrixXs &m_, size_t iter) {
 
     }
 
-    void sample_alpha0(distributions::rng_t &rng) {
-
+    void sample_alpha0(distributions::rng_t &rng, size_t m_tot, size_t iter) {
+      for (size_t i = 0; i < iter; i++) {
+        float w = 0.0;
+        int s = 0;
+        float p;
+        MatrixXs pi_counts_sum = pi_counts_.rowwise().sum();
+        for (size_t k = 0; k < K; k++) {
+          w += distributions::fast_log(distributions::sample_beta(rng, alpha0_ + 1, pi_counts_sum(k,0)));
+          p = pi_counts_sum(k,0) / alpha0_;
+          p /= p + 1;
+          s += distributions::sample_bernoulli(p[k]);
+        }
+        alpha0_ = distributions::sample_gamma(rng, 
+          hyper_alpha_a_ + m_tot - s,
+          1.0 / (hyper_alpha_b_ - w));
+      }
     }
   };
 
