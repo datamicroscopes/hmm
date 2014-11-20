@@ -14,7 +14,26 @@ cdef extern from "microscopes/hmm/model.hpp" namespace "microscopes::hmm":
           float,
           float,
           const vector[float] &,
-          const vector[vector[size_t]])
+          const vector[vector[size_t]],
+          rng_t &)
+
+    state(const model_definition &,
+          bool,
+          float,
+          float,
+          float,
+          const vector[float] &,
+          const vector[vector[size_t]],
+          rng_t &)
+
+    state(const model_definition &,
+          float,
+          float,
+          float,
+          float,
+          const vector[float] &,
+          const vector[vector[size_t]],
+          rng_t &)
 
     void sample_beam(rng_t &, bool)
     size_t nstates()
@@ -22,3 +41,5 @@ cdef extern from "microscopes/hmm/model.hpp" namespace "microscopes::hmm":
     void get_pi(float *)
     void get_phi(float *)
     float joint_log_likelihood()
+    float alpha()
+    float gamma()

@@ -4,11 +4,15 @@ cimport numpy as np
 
 cdef class state:
     def __cinit__(self, model_definition defn, **kwargs):
-        valid_kwargs = ('data','alpha','gamma','alpha_a','alpha_b','gamma_a','gamma_b','H')
+        valid_kwargs = ('data','alpha','gamma','alpha_a','alpha_b','gamma_a','gamma_b','H','r')
         validator.validate_kwargs(kwargs, valid_kwargs)
 
+        assert 'data' in kwargs
         data = kwargs['data']
         cdef vector[vector[size_t]] c_data = data
+
+        assert 'r' in kwargs
+        cdef rng r = kwargs['r']
 
         # some of this should be moved to runner, but for now it's all in state
         cdef vector[float] H
@@ -17,46 +21,40 @@ cdef class state:
         else:
           H = defn.N() * [1.0]
 
-        cdef float alpha, gamma
+        cdef float alpha_a, alpha_b, gamma_a, gamma_b
         cdef bool alpha_flag, gamma_flag
         if 'alpha' in kwargs:
           assert 'alpha_a' not in kwargs and 'alpha_b' not in kwargs
-          alpha_flag = False
-          alpha = kwargs['alpha']
+          alpha_a = kwargs['alpha']
+          alpha_b = -1.0
+          assert alpha_a > 0
         elif 'alpha_a' in kwargs and 'alpha_b' in kwargs:
-          alpha_flag = True
+          alpha_a = kwargs['alpha_a']
+          alpha_b = kwargs['alpha_b']
+          assert alpha_a > 0 and alpha_b > 0
         else:
           assert 'alpha_a' not in kwargs and 'alpha_b' not in kwargs
-          alpha_flag = False
-          alpha = 0.4
+          alpha_a = 0.4
+          alpha_b = -1.0
 
         if 'gamma' in kwargs:
           assert 'gamma_a' not in kwargs and 'gamma_b' not in kwargs
-          gamma_flag = False
-          gamma = kwargs['gamma']
+          gamma_a = kwargs['gamma']
+          gamma_b = -1.0
+          assert gamma_a > 0
         elif 'gamma_a' in kwargs and 'gamma_b' in kwargs:
-          gamma_flag = True
+          gamma_a = kwargs['gamma_a']
+          gamma_b = kwargs['gamma_b']
+          assert gamma_a > 0 and gamma_b > 0
         else:
           assert 'gamma_a' not in kwargs and 'gamma_b' not in kwargs
-          gamma_flag = False
-          gamma = 3.8
+          gamma_a = 3.8
+          gamma_b = -1.0
 
-        if alpha_flag and gamma_flag:
-          self._thisptr.reset(
-            new c_state(defn._thisptr.get()[0], gamma, alpha, H, c_data))
-        elif alpha_flag and not gamma_flag:
-          self._thisptr.reset(
-            new c_state(defn._thisptr.get()[0], False, 
-              kwargs['alpha_a'], kwargs['alpha_b'], H, c_data))
-        elif not alpha_flag and gamma_flag:
-          self._thisptr.reset(
-            new c_state(defn._thisptr.get()[0], True,  
-              kwargs['gamma_a'], kwargs['gamma_b'], H, c_data))
-        else:
-          self._thisptr.reset(
-            new c_state(defn._thisptr.get()[0], 
-              kwargs['gamma_a'], kwargs['gamma_b'], 
-              kwargs['alpha_a'], kwargs['alpha_b'], H, c_data))
+        self._thisptr.reset(
+          new c_state(defn._thisptr.get()[0], 
+            gamma_a, gamma_b, alpha_a, alpha_b, 
+            H, c_data, r._thisptr[0]))
 
     # This will be moved to runner, but just test it here for now
     def sample(self, rng r, verbose=False):
@@ -67,6 +65,12 @@ cdef class state:
 
     def nobs(self):
       return self._thisptr.get()[0].nobs()
+
+    def alpha(self):
+      return self._thisptr.get()[0].alpha()
+
+    def gamma(self):
+      return self._thisptr.get()[0].gamma()
 
     def trans_mat(self):
       cdef size_t K = self.nstates()

@@ -95,3 +95,17 @@ def gen_data(trans_mat, obs_mat, avglen=100, numobs=100, seed=None):
       data[i][t]   = np.nonzero(np.random.multinomial(n=1,pvals=obs_mat[state]))[0][0]
       states[i][t] = state
   return data, states
+
+def jurgen_dataset(avglen=800, seed=None):
+  trans_mat = np.array([[0.01,0.99,0.0,0.0],
+                        [0.0,0.01,0.99,0.0],
+                        [0.0,0.0,0.01,0.99],
+                        [0.99,0.0,0.0,0.01]])
+
+  obs_mat   = np.array([[0.0,0.5,0.5],
+                        [2.0/3.0,1.0/6.0,1.0/6.0],
+                        [0.5,0.0,0.5],
+                        [1.0/3.0,1.0/3.0,1.0/3.0]])
+
+  data, _ = gen_data(trans_mat, obs_mat, avglen=avglen, numobs=1, seed=seed)
+  return data

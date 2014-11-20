@@ -74,74 +74,6 @@ namespace hmm{
 // Implementation of the beam sampler for the HDP-HMM, following van Gael 2008
   class state {
   public:
-    template <class... Args>
-    static inline std::shared_ptr<state>
-    initialize(Args &&... args)
-    {
-      return std::make_shared<state>(std::forward<Args>(args)...);
-    }
-
-    state(const model_definition &defn,
-        float gamma,
-        float alpha0,
-        const std::vector<float> &H,
-        const std::vector<std::vector<size_t> > &data,
-        distributions::rng_t &rng):
-      defn_(defn),
-      data_(data),
-      s_(data.size()),
-      u_(data.size()),
-      pi_counts_(MatrixXs::Zero(1,1)),
-      pi_(1,2),
-      phi_counts_(MatrixXs::Zero(1,H.size())),
-      phi_(1,H.size()),
-      beta_(2),
-      state_visited_(1),
-      gamma_(gamma),
-      alpha0_(alpha0),
-      H_(H),
-      gamma_flag_(false),
-      alpha0_flag_(false),
-      K(1)
-    {
-      init(H, rng);
-    }
-
-    state(const model_definition &defn,
-        bool gamma_flag,
-        float hyper_a,
-        float hyper_b,
-        float other_hyper,
-        const std::vector<float> &H,
-        const std::vector<std::vector<size_t> > &data,
-        distributions::rng_t &rng):
-      defn_(defn),
-      data_(data),
-      s_(data.size()),
-      u_(data.size()),
-      pi_counts_(MatrixXs::Zero(1,1)),
-      pi_(1,2),
-      phi_counts_(MatrixXs::Zero(1,H.size())),
-      phi_(1,H.size()),
-      beta_(2),
-      state_visited_(1),
-      H_(H),
-      gamma_flag_(gamma_flag),
-      alpha0_flag_(!gamma_flag),
-      K(1)
-    {
-      if (gamma_flag) {
-        hyper_gamma_a_ = hyper_a;
-        hyper_gamma_b_ = hyper_b;
-        alpha0_ = other_hyper;
-      } else {
-        hyper_alpha_a_ = hyper_a;
-        hyper_alpha_b_ = hyper_b;
-        gamma_  = other_hyper;
-      }
-      init(H, rng);
-    }
-
     state(const model_definition &defn,
         float hyper_gamma_a,
         float hyper_gamma_b,
@@ -169,7 +101,34 @@ namespace hmm{
       hyper_alpha_b_(hyper_alpha_b),
       K(1)
     {
-      init(H, rng);
+      if (hyper_gamma_b_ == -1.0) {
+        gamma_flag_ = false;
+        gamma_ = hyper_gamma_a_;
+      }
+      if (hyper_alpha_b_ == -1.0) {
+        alpha0_flag_ = false;
+        alpha0_ = hyper_alpha_a;
+      }
+
+      MICROSCOPES_DCHECK(H.size() == defn_.N(), "Number of hyperparameters must match vocabulary size.");
+      // sample hyperparameters from prior
+      if (gamma_flag_)  
+        gamma_  = distributions::sample_gamma(rng, hyper_gamma_a_, 1.0 / hyper_gamma_b_); 
+      if (alpha0_flag_) 
+        alpha0_ = distributions::sample_gamma(rng, hyper_alpha_a_, 1.0 / hyper_alpha_b_);
+      beta_[0] = 0.5;
+      beta_[1] = 0.5; // simple initialization
+      state_visited_[0] = true;
+      for (size_t i = 0; i < data_.size(); i++) {
+        s_[i] = std::vector<size_t>(data_[i].size());
+        u_[i] = std::vector<float>(data_[i].size());
+        pi_counts_(0,0) += data_[i].size();
+        for (size_t j = 0; j < data_[i].size(); j++) {
+          phi_counts_(0,data_[i][j])++;
+        }
+      }
+      sample_pi(rng);
+      sample_phi(rng);
     }
 
     void sample_beam(distributions::rng_t &rng, bool verbose) {
@@ -185,6 +144,8 @@ namespace hmm{
     inline void get_phi(float * f) { Eigen::Map<MatrixXf>(f, K, defn_.N()) = phi_; }
     inline size_t nstates()        { return K; }
     inline size_t nobs()           { return defn_.N(); }
+    inline float alpha()           { return alpha0_; }
+    inline float gamma()           { return gamma_; }
 
     float joint_log_likelihood() {
       float logp = 0.0;
@@ -250,30 +211,6 @@ namespace hmm{
     //Should be smaller than the least value of the auxiliary variable, so all possible states visited by the beam sampler are instantiated
     float max_pi;
     size_t K;
-
-    // Shared across the different constructors. 
-    // Different calling conventions are just to distinguish different flags about sampling hyperparameters
-    void init(const std::vector<float> &H, distributions::rng_t &rng) {
-      MICROSCOPES_DCHECK(H.size() == defn_.N(), "Number of hyperparameters must match vocabulary size.");
-      // sample hyperparameters from prior
-      if (gamma_flag_)  
-        gamma_  = distributions::sample_gamma(rng, hyper_gamma_a_, 1.0 / hyper_gamma_b_); 
-      if (alpha0_flag_) 
-        alpha0_ = distributions::sample_gamma(rng, hyper_alpha_a_, 1.0 / hyper_alpha_b_);
-      beta_[0] = 0.5;
-      beta_[1] = 0.5; // simple initialization
-      state_visited_[0] = true;
-      for (size_t i = 0; i < data_.size(); i++) {
-        s_[i] = std::vector<size_t>(data_[i].size());
-        u_[i] = std::vector<float>(data_[i].size());
-        pi_counts_(0,0) += data_[i].size();
-        for (size_t j = 0; j < data_[i].size(); j++) {
-          phi_counts_(0,data_[i][j])++;
-        }
-      }
-      sample_pi(rng);
-      sample_phi(rng);
-    }
 
     // sampling functions. later we can integrate these into microscopes::kernels where appropriate.
     void sample_s(distributions::rng_t &rng, bool verbose) {
