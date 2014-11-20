@@ -109,6 +109,28 @@ namespace hmm{
     inline float alpha()           { return alpha0_; }
     inline float gamma()           { return gamma_; }
 
+    inline void set_alpha_hypers(float hyper_alpha_a, float hyper_alpha_b) {
+      alpha0_flag_ = true;
+      hyper_alpha_a_ = hyper_alpha_a;
+      hyper_alpha_b_ = hyper_alpha_b;
+    }
+
+    inline void set_gamma_hypers(float hyper_gamma_a, float hyper_gamma_b) {
+      gamma_flag_ = true;
+      hyper_gamma_a_ = hyper_gamma_a;
+      hyper_gamma_b_ = hyper_gamma_b;
+    }
+
+    inline void fix_alpha(float alpha0) {
+      alpha0_flag_ = false;
+      alpha0_ = alpha0;
+    }
+
+    inline void fix_gamma(float gamma) {
+      gamma_flag_ = false;
+      gamma_ = gamma;
+    }
+
     float joint_log_likelihood() {
       float logp = 0.0;
       for (size_t k = 0; k < K; k++) {
@@ -428,10 +450,12 @@ namespace hmm{
           p = pi_counts_sum(k,0) / alpha0_;
           p /= p + 1;
           s += distributions::sample_bernoulli(rng, p);
+          std::cout << "w[" << k << "]:" << w << ", p[" << k << "]" << p;
         }
         alpha0_ = distributions::sample_gamma(rng, 
           hyper_alpha_a_ + m - s,
           1.0 / (hyper_alpha_b_ - w));
+        std::cout << ", alpha: " << alpha0_ << std::endl;
       }
     }
   };

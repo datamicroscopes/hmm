@@ -72,6 +72,18 @@ cdef class state:
     def gamma(self):
       return self._thisptr.get()[0].gamma()
 
+    def set_alpha_hypers(self, float alpha_a, float alpha_b):
+      self._thisptr.get()[0].set_alpha_hypers(alpha_a, alpha_b)
+
+    def set_gamma_hypers(self, float gamma_a, float gamma_b):
+      self._thisptr.get()[0].set_gamma_hypers(gamma_a, gamma_b)
+
+    def fix_alpha(self, float alpha):
+      self._thisptr.get()[0].fix_alpha(alpha)
+
+    def fix_gamma(self, float gamma):
+      self._thisptr.get()[0].fix_gamma(gamma)
+
     def trans_mat(self):
       cdef size_t K = self.nstates()
       cdef float * pi = <float *> malloc(sizeof(float) * K * (K + 1))

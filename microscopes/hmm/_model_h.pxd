@@ -13,22 +13,6 @@ cdef extern from "microscopes/hmm/model.hpp" namespace "microscopes::hmm":
     state(const model_definition &,
           float,
           float,
-          const vector[float] &,
-          const vector[vector[size_t]],
-          rng_t &)
-
-    state(const model_definition &,
-          bool,
-          float,
-          float,
-          float,
-          const vector[float] &,
-          const vector[vector[size_t]],
-          rng_t &)
-
-    state(const model_definition &,
-          float,
-          float,
           float,
           float,
           const vector[float] &,
@@ -43,3 +27,7 @@ cdef extern from "microscopes/hmm/model.hpp" namespace "microscopes::hmm":
     float joint_log_likelihood()
     float alpha()
     float gamma()
+    void set_alpha_hypers(float, float)
+    void set_gamma_hypers(float, float)
+    void fix_alpha(float)
+    void fix_gamma(float)
