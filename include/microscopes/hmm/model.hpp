@@ -180,9 +180,7 @@ namespace hmm{
       sample_u(rng);
       sample_s(rng,verbose);
       clear_empty_states();
-      sample_beta(rng);
-      if (gamma_flag_)  sample_gamma(rng, 20);
-      if (alpha0_flag_) sample_alpha0(rng, 20);
+      sample_hypers(rng);
       sample_pi(rng);
       sample_phi(rng);
     }
