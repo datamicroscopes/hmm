@@ -84,6 +84,9 @@ cdef class state:
     def fix_gamma(self, float gamma):
       self._thisptr.get()[0].fix_gamma(gamma)
 
+    def sample_hypers(self, rng r, niter=20, nloops=1):
+      self._thisptr.get()[0].sample_hypers(r._thisptr[0],niter,nloops)
+
     def trans_mat(self):
       cdef size_t K = self.nstates()
       cdef float * pi = <float *> malloc(sizeof(float) * K * (K + 1))
