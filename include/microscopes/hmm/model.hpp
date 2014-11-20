@@ -86,7 +86,7 @@ namespace hmm{
         float alpha0,
         const std::vector<float> &H,
         const std::vector<std::vector<size_t> > &data,
-        const distributions::rng_t &rng):
+        distributions::rng_t &rng):
       defn_(defn),
       data_(data),
       s_(data.size()),
@@ -114,7 +114,7 @@ namespace hmm{
         float other_hyper,
         const std::vector<float> &H,
         const std::vector<std::vector<size_t> > &data,
-        const distributions::rng_t &rng):
+        distributions::rng_t &rng):
       defn_(defn),
       data_(data),
       s_(data.size()),
@@ -125,8 +125,6 @@ namespace hmm{
       phi_(1,H.size()),
       beta_(2),
       state_visited_(1),
-      gamma_(gamma),
-      alpha0_(alpha0),
       H_(H),
       gamma_flag_(gamma_flag),
       alpha0_flag_(!gamma_flag),
@@ -151,7 +149,7 @@ namespace hmm{
         float hyper_alpha_b,
         const std::vector<float> &H,
         const std::vector<std::vector<size_t> > &data,
-        const distributions::rng_t &rng):
+        distributions::rng_t &rng):
       defn_(defn),
       data_(data),
       s_(data.size()),
@@ -162,8 +160,6 @@ namespace hmm{
       phi_(1,H.size()),
       beta_(2),
       state_visited_(1),
-      gamma_(gamma),
-      alpha0_(alpha0),
       H_(H),
       gamma_flag_(true),
       alpha0_flag_(true),
@@ -257,7 +253,7 @@ namespace hmm{
 
     // Shared across the different constructors. 
     // Different calling conventions are just to distinguish different flags about sampling hyperparameters
-    void init(const std::vector<float> &H, const distributions::rng_t &rng) {
+    void init(const std::vector<float> &H, distributions::rng_t &rng) {
       MICROSCOPES_DCHECK(H.size() == defn_.N(), "Number of hyperparameters must match vocabulary size.");
       // sample hyperparameters from prior
       if (gamma_flag_)  
@@ -272,7 +268,7 @@ namespace hmm{
         u_[i] = std::vector<float>(data_[i].size());
         pi_counts_(0,0) += data_[i].size();
         for (size_t j = 0; j < data_[i].size(); j++) {
-          phi_counts_(0,data[i][j])++;
+          phi_counts_(0,data_[i][j])++;
         }
       }
       sample_pi(rng);
@@ -508,15 +504,15 @@ namespace hmm{
     // Resamples the hyperparameter gamma, 
     // not to be confused with distributions::sample_gamma, 
     // which samples from a Gamma distribution
-    void sample_gamma(distributions::rngt_t &rng, size_t m, size_t iter) {
+    void sample_gamma(distributions::rng_t &rng, size_t m, size_t iter) {
       for (size_t i = 0; i < iter; i++) {
-        float mu = distributions::sample_beta(gamma_ + 1, m);
+        float mu = distributions::sample_beta(rng, gamma_ + 1, m);
         float pi_mu = 1.0 / ( 1.0 + ( m * ( hyper_gamma_b_ - distributions::fast_log(mu) ) ) / ( hyper_gamma_a_ + K - 1 ) );
-        if (distributions::sample_bernoulli(pi_mu)) {
-          gamma = distributions::sample_gamma(hyper_gamma_a_ + K,
+        if (distributions::sample_bernoulli(rng, pi_mu)) {
+          gamma_ = distributions::sample_gamma(rng, hyper_gamma_a_ + K,
             1.0 / (hyper_gamma_b_ - distributions::fast_log(mu)));
         } else {
-          gamma = distributions::sample_gamma(hyper_gamma_a_ + K + 1,
+          gamma_ = distributions::sample_gamma(rng, hyper_gamma_a_ + K + 1,
             1.0 / (hyper_gamma_b_ - distributions::fast_log(mu)));
         }
       }
@@ -527,11 +523,12 @@ namespace hmm{
         float w = 0.0;
         int s = 0;
         float p;
-        for (size_t n : pi_counts_.rowwise().sum()) {
-          w += distributions::fast_log(distributions::sample_beta(rng, alpha0_ + 1, n));
-          p = n / alpha0_;
+        MatrixXs pi_counts_sum = pi_counts_.rowwise().sum();
+        for (size_t k = 0; k < K; k++) {
+          w += distributions::fast_log(distributions::sample_beta(rng, alpha0_ + 1, pi_counts_sum(k,0)));
+          p = pi_counts_sum(k,0) / alpha0_;
           p /= p + 1;
-          s += distributions::sample_bernoulli(p);
+          s += distributions::sample_bernoulli(rng, p);
         }
         alpha0_ = distributions::sample_gamma(rng, 
           hyper_alpha_a_ + m - s,
