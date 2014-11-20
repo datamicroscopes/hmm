@@ -420,7 +420,8 @@ namespace hmm{
           common::util::remove_column<float>(pi_, k);
           common::util::remove_column<size_t>(pi_counts_, k);
 
-          // this is way inefficient and instead of relabeling states after every sample, we should probably just track which states are "active". This'll do for now.
+          // this is way inefficient and instead of relabeling states after every sample
+          // we should probably just track which states are "active". This'll do for now.
           for (size_t i = 0; i < data_.size(); i++) {
             for (size_t t = 0; t < data_[i].size(); t++) {
               if (s_[i][t] > static_cast<size_t>(k)) s_[i][t]--;
@@ -501,29 +502,41 @@ namespace hmm{
       beta_.assign(new_beta, new_beta + K+1);
 
       if (gamma_flag_)
-        sample_gamma(rng, m_, 20);
+        sample_gamma(rng, m_.sum(), 20);
       if (alpha0_flag_)
         sample_alpha0(rng, m_.sum(), 20);
     }
 
-    void sample_gamma(distributions::rngt_t &rng, MatrixXs &m_, size_t iter) {
-
+    // Resamples the hyperparameter gamma, 
+    // not to be confused with distributions::sample_gamma, 
+    // which samples from a Gamma distribution
+    void sample_gamma(distributions::rngt_t &rng, size_t m, size_t iter) {
+      for (size_t i = 0; i < iter; i++) {
+        float mu = distributions::sample_beta(gamma_ + 1, m);
+        float pi_mu = 1.0 / ( 1.0 + ( m * ( hyper_gamma_b_ - distributions::fast_log(mu) ) ) / ( hyper_gamma_a_ + K - 1 ) );
+        if (distributions::sample_bernoulli(pi_mu)) {
+          gamma = distributions::sample_gamma(hyper_gamma_a_ + K,
+            1.0 / (hyper_gamma_b_ - distributions::fast_log(mu)));
+        } else {
+          gamma = distributions::sample_gamma(hyper_gamma_a_ + K + 1,
+            1.0 / (hyper_gamma_b_ - distributions::fast_log(mu)));
+        }
+      }
     }
 
-    void sample_alpha0(distributions::rng_t &rng, size_t m_tot, size_t iter) {
+    void sample_alpha0(distributions::rng_t &rng, size_t m, size_t iter) {
       for (size_t i = 0; i < iter; i++) {
         float w = 0.0;
         int s = 0;
         float p;
-        MatrixXs pi_counts_sum = pi_counts_.rowwise().sum();
-        for (size_t k = 0; k < K; k++) {
-          w += distributions::fast_log(distributions::sample_beta(rng, alpha0_ + 1, pi_counts_sum(k,0)));
-          p = pi_counts_sum(k,0) / alpha0_;
+        for (size_t n : pi_counts_.rowwise().sum()) {
+          w += distributions::fast_log(distributions::sample_beta(rng, alpha0_ + 1, n));
+          p = n / alpha0_;
           p /= p + 1;
-          s += distributions::sample_bernoulli(p[k]);
+          s += distributions::sample_bernoulli(p);
         }
         alpha0_ = distributions::sample_gamma(rng, 
-          hyper_alpha_a_ + m_tot - s,
+          hyper_alpha_a_ + m - s,
           1.0 / (hyper_alpha_b_ - w));
       }
     }
