@@ -19,44 +19,6 @@ namespace hmm{
   typedef Eigen::Matrix<size_t, Eigen::Dynamic, Eigen::Dynamic> MatrixXs;
   typedef Eigen::MatrixXf MatrixXf;
 
-  // float sample_beta_robust(
-  //         distributions::rng_t & rng,
-  //         float alpha,
-  //         float beta) {
-  //     float x = distributions::sample_gamma(rng, alpha);
-  //     float y = distributions::sample_gamma(rng, beta);
-  //     if (x==0 && y==0) return distributions::sample_bernoulli(rng, alpha / (alpha + beta)) ? 1.0 : 0.0;
-  //     return x / (x + y);
-  // }
-
-  // template<class Alloc>
-  // inline size_t sample_from_likelihoods(
-  //         distributions::rng_t & rng,
-  //         const std::vector<float, Alloc> & likelihoods,
-  //         float total_likelihood) {
-  //     const size_t size = likelihoods.size();
-  //     DIST_ASSERT_LT(0, size);
-
-  //     float t = total_likelihood * distributions::sample_unif01(rng);
-
-  //     for (size_t i = 0; DIST_LIKELY(i < size); ++i) {
-  //         t -= likelihoods[i];
-  //         if (DIST_UNLIKELY(t <= 0)) {
-  //             return i;
-  //         }
-  //     }
-
-  //     return size - 1;
-  // }
-
-  // template<class Alloc>
-  // inline size_t sample_from_likelihoods(
-  //         distributions::rng_t & rng,
-  //         const std::vector<float, Alloc> & likelihoods) {
-  //     float total = distributions::vector_sum(likelihoods.size(), likelihoods.data());
-  //     return sample_from_likelihoods(rng, likelihoods, total);
-  // }
-
   class model_definition {
   public:
     /**
