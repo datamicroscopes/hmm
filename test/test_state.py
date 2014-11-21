@@ -124,6 +124,7 @@ def test_beam_sampler_2():
   s = state(defn, data=data, r=prng)
   s.sample(prng)
 
+@attr('slow')
 def test_beam_sampler_3():
   defn = model_definition(27)
   data = toy_dataset(defn,states=60,avglen=1000,numobs=1000)
