@@ -31,4 +31,4 @@ cdef extern from "microscopes/hmm/model.hpp" namespace "microscopes::hmm":
     void set_gamma_hypers(float, float)
     void fix_alpha(float)
     void fix_gamma(float)
-    void sample_hypers(rng_t &, size_t, size_t)
+    void sample_hypers(rng_t &, size_t)

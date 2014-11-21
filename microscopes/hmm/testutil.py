@@ -109,3 +109,6 @@ def jurgen_dataset(avglen=800, seed=None):
 
   data, _ = gen_data(trans_mat, obs_mat, avglen=avglen, numobs=1, seed=seed)
   return data
+
+def print_state(s, iter):
+  print "Iter: %d, States: %d, JLL: %f, alpha: %f, gamma: %f" % (iter, s.nstates(), s.joint_log_likelihood(), s.alpha(), s.gamma())

@@ -97,7 +97,7 @@ namespace hmm{
       sample_u(rng);
       sample_s(rng,verbose);
       clear_empty_states();
-      sample_hypers(rng,20,1);
+      sample_hypers(rng,20);
       sample_pi(rng);
       sample_phi(rng);
     }
@@ -159,49 +159,40 @@ namespace hmm{
       return logp;
     }
 
-    void sample_hypers(distributions::rng_t &rng, size_t niter, size_t nloops) {
-      for (size_t loop = 0; loop < nloops; loop++) {
-        // sample auxiliary variable
-        MatrixXs m_ = MatrixXs::Zero(K, K);
-        std::uniform_real_distribution<float> sampler (0.0, 1.0);
-        for (size_t i = 0; i < K; i++) {
-          for (size_t j = 0; j < K; j++) {
-            size_t n_ij = pi_counts_(i,j);
-            if (n_ij > 0) {
-              for (size_t l = 0; l < n_ij; l++) {
-                if (sampler(rng) < (alpha0_ * beta_[j]) / (alpha0_ * beta_[j] + l))
-                {
-                  m_(i,j)++;
-                }
+    void sample_hypers(distributions::rng_t &rng, size_t niter) {
+      // sample auxiliary variable
+      MatrixXs m_ = MatrixXs::Zero(K, K);
+      std::uniform_real_distribution<float> sampler (0.0, 1.0);
+      for (size_t i = 0; i < K; i++) {
+        for (size_t j = 0; j < K; j++) {
+          size_t n_ij = pi_counts_(i,j);
+          if (n_ij > 0) {
+            for (size_t l = 0; l < n_ij; l++) {
+              if (sampler(rng) < (alpha0_ * beta_[j]) / (alpha0_ * beta_[j] + l))
+              {
+                m_(i,j)++;
               }
             }
           }
         }
-        if (nloops > 1) {
-          std::cout << "alpha: " << alpha0_ << std::endl;
-          std::cout << "N: " << std::endl << pi_counts_ << std:: endl;
-          std::cout << "M: " << std::endl << m_ << std::endl << std::endl;
-        }
-
-        if (loop == 0) {
-          float alphas[K+1];
-          float new_beta[K+1];
-
-          MatrixXs m_sum = m_.colwise().sum();
-          for (size_t k = 0; k < K; k++) {
-            alphas[k] = m_sum(k);
-          }
-          alphas[K] = gamma_;
-
-          distributions::sample_dirichlet(rng, K+1, alphas, new_beta);
-          beta_.assign(new_beta, new_beta + K+1);
-        }
-
-        if (gamma_flag_)
-          sample_gamma(rng, m_.sum(), niter);
-        if (alpha0_flag_)
-          sample_alpha0(rng, m_.sum(), niter);
       }
+
+      float alphas[K+1];
+      float new_beta[K+1];
+
+      MatrixXs m_sum = m_.colwise().sum();
+      for (size_t k = 0; k < K; k++) {
+        alphas[k] = m_sum(k);
+      }
+      alphas[K] = gamma_;
+
+      distributions::sample_dirichlet(rng, K+1, alphas, new_beta);
+      beta_.assign(new_beta, new_beta + K+1);
+
+      if (gamma_flag_)
+        sample_gamma(rng, m_.sum(), niter);
+      if (alpha0_flag_)
+        sample_alpha0(rng, m_.sum(), niter);
     }
 
   protected:
