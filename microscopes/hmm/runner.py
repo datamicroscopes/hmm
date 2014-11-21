@@ -4,13 +4,9 @@ Implements the Runner interface fo HMM
 
 from microscopes.common import validator
 from microscopes.common.rng import rng
-from microscopes.common.variadic._dataview import abstract_dataview
+# from microscopes.common.variadic._dataview import abstract_dataview
 from microscopes.hmm.definition import model_definition
 from microscopes.hmm.model import state
-# from microscopes.hmm.kernels import beam
-
-import itertools as it
-import copy
 
 
 def default_kernel_config(defn):
@@ -21,8 +17,15 @@ def default_kernel_config(defn):
     ----------
     defn : hmm definition
     """
-    # XXX(stephentu): fill me in
-    return [('assign', {})]
+    return [('beam', {}),
+            ('hypers',
+                {
+                    'alpha_a': 4.0,
+                    'alpha_b': 2.0,
+                    'gamma_a': 3.0, 
+                    'gamma_b': 6.0
+                }
+            )]
 
 
 class runner(object):
@@ -39,13 +42,15 @@ class runner(object):
     latent : ``state``
         The initialization state.
 
-    kernel_config : list
+    kernel_config : list. 
+        Currently a dummy variable to conform to the runner interface used
+        in other models, as there is only one kernel configuration implemented
 
     """
 
     def __init__(self, defn, view, latent, kernel_config):
         validator.validate_type(defn, model_definition, 'defn')
-        validator.validate_type(view, abstract_dataview, 'view')
+        # validator.validate_type(view, abstract_dataview, 'view') # for now, view is actually a list of lists
         validator.validate_type(latent, state, 'latent')
 
         self._defn = defn
@@ -54,12 +59,44 @@ class runner(object):
 
         self._kernel_config = []
         for kernel in kernel_config:
-            name, config = kernel
+            if hasattr(kernel, '__iter__'):
+                name, config = kernel
+            else:
+                name, config = kernel, {}
             validator.validate_dict_like(config)
-        if name == 'beam':
-            pass
-        else:
-            raise ValueError("bad kernel found: {}".format(name))
+
+            if name == 'beam':
+                pass
+            elif name == 'hypers':
+                if 'alpha' in config:
+                    assert 'alpha_a' not in config and 'alpha_b' not in config
+                    alpha = config['alpha']
+                    assert alpha > 0
+                    latent.fix_alpha(alpha)
+                elif 'alpha_a' in config and 'alpha_b' in config:
+                    assert 'alpha' not in config
+                    alpha_a = config['alpha_a']
+                    alpha_b = config['alpha_b']
+                    assert alpha_a > 0 and alpha_b > 0
+                    latent.set_alpha_hypers(alpha_a, alpha_b)
+                else:
+                    raise ValueError("Configuration missing parameters for alpha0")
+
+                if 'gamma' in config:
+                    assert 'gamma_a' not in config and 'gamma_b' not in config
+                    gamma = config['gamma']
+                    assert gamma > 0
+                    latent.fix_gamma(gamma)
+                elif 'gamma_a' in config and 'gamma_b' in config:
+                    assert 'gamma' not in config
+                    gamma_a = config['gamma_a']
+                    gamma_b = config['gamma_b']
+                    assert gamma_a > 0 and gamma_b > 0
+                    latent.set_gamma_hypers(gamma_a, gamma_b)
+                else:
+                    raise ValueError("Configuration missing parameters for gamma")
+            else:
+                raise ValueError("bad kernel found: {}".format(name))
 
         self._kernel_config.append((name, config))
 
@@ -75,17 +112,11 @@ class runner(object):
         """
         validator.validate_type(r, rng, param_name='r')
         validator.validate_positive(niters, param_name='niters')
-        doc_model = bind(self._latent, data=self._view)
         for _ in xrange(niters):
-            for name, config in self._kernel_config:
-                pass
-                # if name == 'assign':
-                #     assign2(doc_model, r)
-                #     tabel_models = [
-                #         bind(self._latent, document=did)
-                #         for did in xrange(self._latent.nentities())
-                #     ]
-                #     for table_model in tabel_models:
-                #         assign(table_model, r)
-                # else:
-                #     assert False, 'should not be reached'
+            # This goes against every object-oriented bone in my body, but the interface must be satisfied
+            latent._thisptr.get()[0].sample_aux()
+            latent._thisptr.get()[0].sample_state()
+            latent._thisptr.get()[0].clear_empty_states()
+            latent._thisptr.get()[0].sample_hypers(20)
+            latent._thisptr.get()[0].sample_pi()
+            latent._thisptr.get()[0].sample_phi()

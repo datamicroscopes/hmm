@@ -37,13 +37,9 @@ namespace hmm{
   class state {
   public:
     state(const model_definition &defn,
-        float hyper_gamma_a,
-        float hyper_gamma_b,
-        float hyper_alpha_a,
-        float hyper_alpha_b,
-        const std::vector<float> &H,
-        const std::vector<std::vector<size_t> > &data,
-        distributions::rng_t &rng):
+          const std::vector<float> &H,
+          const std::vector<std::vector<size_t> > &data,
+          distributions::rng_t &rng):
       defn_(defn),
       data_(data),
       s_(data.size()),
@@ -57,21 +53,8 @@ namespace hmm{
       H_(H),
       gamma_flag_(true),
       alpha0_flag_(true),
-      hyper_gamma_a_(hyper_gamma_a),
-      hyper_gamma_b_(hyper_gamma_b),
-      hyper_alpha_a_(hyper_alpha_a),
-      hyper_alpha_b_(hyper_alpha_b),
       K(1)
     {
-      if (hyper_gamma_b_ == -1.0) {
-        gamma_flag_ = false;
-        gamma_ = hyper_gamma_a_;
-      }
-      if (hyper_alpha_b_ == -1.0) {
-        alpha0_flag_ = false;
-        alpha0_ = hyper_alpha_a;
-      }
-
       MICROSCOPES_DCHECK(H.size() == defn_.N(), "Number of hyperparameters must match vocabulary size.");
       // sample hyperparameters from prior
       if (gamma_flag_)  
@@ -89,15 +72,6 @@ namespace hmm{
           phi_counts_(0,data_[i][j])++;
         }
       }
-      sample_pi(rng);
-      sample_phi(rng);
-    }
-
-    void sample_beam(distributions::rng_t &rng, bool verbose) {
-      sample_u(rng);
-      sample_s(rng,verbose);
-      clear_empty_states();
-      sample_hypers(rng,20);
       sample_pi(rng);
       sample_phi(rng);
     }
@@ -159,146 +133,7 @@ namespace hmm{
       return logp;
     }
 
-    void sample_hypers(distributions::rng_t &rng, size_t niter) {
-      // sample auxiliary variable
-      MatrixXs m_ = MatrixXs::Zero(K, K);
-      std::uniform_real_distribution<float> sampler (0.0, 1.0);
-      for (size_t i = 0; i < K; i++) {
-        for (size_t j = 0; j < K; j++) {
-          size_t n_ij = pi_counts_(i,j);
-          if (n_ij > 0) {
-            for (size_t l = 0; l < n_ij; l++) {
-              if (sampler(rng) < (alpha0_ * beta_[j]) / (alpha0_ * beta_[j] + l))
-              {
-                m_(i,j)++;
-              }
-            }
-          }
-        }
-      }
-
-      float alphas[K+1];
-      float new_beta[K+1];
-
-      MatrixXs m_sum = m_.colwise().sum();
-      for (size_t k = 0; k < K; k++) {
-        alphas[k] = m_sum(k);
-      }
-      alphas[K] = gamma_;
-
-      distributions::sample_dirichlet(rng, K+1, alphas, new_beta);
-      beta_.assign(new_beta, new_beta + K+1);
-
-      if (gamma_flag_)
-        sample_gamma(rng, m_.sum(), niter);
-      if (alpha0_flag_)
-        sample_alpha0(rng, m_.sum(), niter);
-    }
-
-  protected:
-
-    // parameters
-
-    // these three all have the same shape as the data
-    const model_definition defn_;
-    const std::vector<std::vector <size_t> > data_; // XXX: For now, the observation type is just a vector of vectors of ints. Later we can switch over to using recarrays
-    std::vector<std::vector<size_t> > s_; // the state sequence
-    std::vector<std::vector<float> > u_; // the slice sampling parameter for each time step in the series
-
-    // same shape as the transition matrix, or plus one column
-    MatrixXs pi_counts_; // the count of how many times a transition occurs between states. Size K x K.
-    MatrixXf pi_; // the observed portion of the infinite transition matrix. Size K x K+1.
-
-    // same shape as the observation matrix
-    MatrixXs phi_counts_; // count of how many times an observation is seen from a given state. Size K x N.
-    MatrixXf phi_; // the emission matrix. Size K x N.
-
-    std::vector<float> beta_; // the stick lengths for the top-level DP draw. Size K+1.
-    std::vector<bool> state_visited_; // Size K
-
-    // hyperparameters
-    float gamma_;
-    float alpha0_;
-    const std::vector<float> H_; // hyperparameters for a Dirichlet prior over observations. Will generalize this to other observation models later.
-
-    // If true, resample the hyperparameter in each loop
-    bool gamma_flag_, alpha0_flag_; 
-    // Only assigned values if the corresponding flag is true
-    float hyper_gamma_a_, hyper_gamma_b_,
-          hyper_alpha_a_, hyper_alpha_b_;
-
-    // helper fields
-    // Over all instantiated states, the maximum value of the part of pi_k that belongs to the "unseen" states.
-    //Should be smaller than the least value of the auxiliary variable, so all possible states visited by the beam sampler are instantiated
-    float max_pi;
-    size_t K;
-
-    // sampling functions. later we can integrate these into microscopes::kernels where appropriate.
-    void sample_s(distributions::rng_t &rng, bool verbose) {
-      pi_counts_ = MatrixXs::Zero(K,K); // clear counts
-      phi_counts_ = MatrixXs::Zero(K,defn_.N());
-      state_visited_ = std::vector<bool>(K);
-      for (size_t i = 0; i < data_.size(); i++) {
-        // Forward-filter
-        MatrixXf probs(data_[i].size(),K);
-        for (size_t t = 0; t < data_[i].size(); t++) {
-          float total_prob = 0.0;
-          for (size_t k = 0; k < K; k++) {
-            if (t == 0) {
-              probs(t,k) = phi_(k,data_[i][t]) * (u_[i][t] <= pi_(0,k) ? 1.0 : 0.0);
-            }
-            else {
-              probs(t,k) = 0.0;
-              for (size_t l = 0; l < K; l++) {
-                if (u_[i][t] <= pi_(l,k)) {
-                  probs(t,k) += probs(t-1,l);
-                }
-              }
-              probs(t,k) *= phi_(k,data_[i][t]);
-            }
-            total_prob += probs(t,k);
-          }
-          MICROSCOPES_DCHECK(total_prob > 0.0, "Zero total probability");
-          for (size_t k = 0; k < K; k++) { // normalize to prevent numerical underflow
-            probs(t,k) /= total_prob;
-          }
-          if (verbose) {
-            std::cout << "Forward " << t << ": [";
-            for (size_t k = 0; k < K; k++) {
-              std::cout << probs(t,k);
-              if (k < K-1) std::cout << ", ";
-            }
-            std::cout << "]" << std::endl;
-          }
-        }
-
-        // Backwards-sample
-        std::vector<float> likelihoods(K);
-        Eigen::Map<Eigen::VectorXf> mapl(&likelihoods[0], K);
-        mapl = probs.row(data_[i].size()-1);
-        s_[i][data_[i].size()-1] = distributions::sample_from_likelihoods(rng, likelihoods);
-        state_visited_[s_[i][data_[i].size()-1]] = true;
-        phi_counts_(s_[i][data_[i].size()-1],data_[i][data_[i].size()-1])++;
-        for (int t = data_[i].size()-1; t > 0; t--) {
-          for (size_t k = 0; k < K; k++) {
-            // if (verbose) std::cout << "u: " << u_[i][t] << ", pi: " << pi_(k,s_[i][t]) << std::endl;
-            if (u_[i][t] >= pi_(k,s_[i][t])) {
-              probs(t-1,k) = 0;
-            }
-          }
-          mapl = probs.row(t-1);
-          if (verbose) std::cout << "Backward " << t-1 << ": " << likelihoods << std::endl;
-          s_[i][t-1] = distributions::sample_from_likelihoods(rng, likelihoods);
-          // Update counts
-          state_visited_[s_[i][t-1]] = true;
-          pi_counts_(s_[i][t-1],s_[i][t])++;
-          phi_counts_(s_[i][t-1],data_[i][t-1])++;
-        }
-        pi_counts_(0,s_[i][0])++; // Also add count for state 0, which is the initial state
-      }
-    }
-
-    void sample_u(distributions::rng_t &rng) {
+    void sample_aux(distributions::rng_t &rng) {
       size_t prev_state;
       std::uniform_real_distribution<float> sampler (0.0, 1.0);
       float min_u = 1.0; // used to figure out where to truncate sampling of pi
@@ -356,6 +191,106 @@ namespace hmm{
       }
     }
 
+    void sample_state(distributions::rng_t &rng) {
+      pi_counts_ = MatrixXs::Zero(K,K); // clear counts
+      phi_counts_ = MatrixXs::Zero(K,defn_.N());
+      state_visited_ = std::vector<bool>(K);
+      for (size_t i = 0; i < data_.size(); i++) {
+        // Forward-filter
+        MatrixXf probs(data_[i].size(),K);
+        for (size_t t = 0; t < data_[i].size(); t++) {
+          float total_prob = 0.0;
+          for (size_t k = 0; k < K; k++) {
+            if (t == 0) {
+              probs(t,k) = phi_(k,data_[i][t]) * (u_[i][t] <= pi_(0,k) ? 1.0 : 0.0);
+            }
+            else {
+              probs(t,k) = 0.0;
+              for (size_t l = 0; l < K; l++) {
+                if (u_[i][t] <= pi_(l,k)) {
+                  probs(t,k) += probs(t-1,l);
+                }
+              }
+              probs(t,k) *= phi_(k,data_[i][t]);
+            }
+            total_prob += probs(t,k);
+          }
+          MICROSCOPES_DCHECK(total_prob > 0.0, "Zero total probability");
+          for (size_t k = 0; k < K; k++) { // normalize to prevent numerical underflow
+            probs(t,k) /= total_prob;
+          }
+          // if (verbose) {
+          //   std::cout << "Forward " << t << ": [";
+          //   for (size_t k = 0; k < K; k++) {
+          //     std::cout << probs(t,k);
+          //     if (k < K-1) std::cout << ", ";
+          //   }
+          //   std::cout << "]" << std::endl;
+          // }
+        }
+
+        // Backwards-sample
+        std::vector<float> likelihoods(K);
+        Eigen::Map<Eigen::VectorXf> mapl(&likelihoods[0], K);
+        mapl = probs.row(data_[i].size()-1);
+        s_[i][data_[i].size()-1] = distributions::sample_from_likelihoods(rng, likelihoods);
+        state_visited_[s_[i][data_[i].size()-1]] = true;
+        phi_counts_(s_[i][data_[i].size()-1],data_[i][data_[i].size()-1])++;
+        for (int t = data_[i].size()-1; t > 0; t--) {
+          for (size_t k = 0; k < K; k++) {
+            // if (verbose) std::cout << "u: " << u_[i][t] << ", pi: " << pi_(k,s_[i][t]) << std::endl;
+            if (u_[i][t] >= pi_(k,s_[i][t])) {
+              probs(t-1,k) = 0;
+            }
+          }
+          mapl = probs.row(t-1);
+          // if (verbose) std::cout << "Backward " << t-1 << ": " << likelihoods << std::endl;
+          s_[i][t-1] = distributions::sample_from_likelihoods(rng, likelihoods);
+          // Update counts
+          state_visited_[s_[i][t-1]] = true;
+          pi_counts_(s_[i][t-1],s_[i][t])++;
+          phi_counts_(s_[i][t-1],data_[i][t-1])++;
+        }
+        pi_counts_(0,s_[i][0])++; // Also add count for state 0, which is the initial state
+      }
+    }
+
+    void sample_hypers(distributions::rng_t &rng, size_t niter) {
+      // sample auxiliary variable
+      MatrixXs m_ = MatrixXs::Zero(K, K);
+      std::uniform_real_distribution<float> sampler (0.0, 1.0);
+      for (size_t i = 0; i < K; i++) {
+        for (size_t j = 0; j < K; j++) {
+          size_t n_ij = pi_counts_(i,j);
+          if (n_ij > 0) {
+            for (size_t l = 0; l < n_ij; l++) {
+              if (sampler(rng) < (alpha0_ * beta_[j]) / (alpha0_ * beta_[j] + l))
+              {
+                m_(i,j)++;
+              }
+            }
+          }
+        }
+      }
+
+      float alphas[K+1];
+      float new_beta[K+1];
+
+      MatrixXs m_sum = m_.colwise().sum();
+      for (size_t k = 0; k < K; k++) {
+        alphas[k] = m_sum(k);
+      }
+      alphas[K] = gamma_;
+
+      distributions::sample_dirichlet(rng, K+1, alphas, new_beta);
+      beta_.assign(new_beta, new_beta + K+1);
+
+      if (gamma_flag_)
+        sample_gamma(rng, m_.sum(), niter);
+      if (alpha0_flag_)
+        sample_alpha0(rng, m_.sum(), niter);
+    }
+
     void clear_empty_states() {
       for (ssize_t k = K-1; k >= 0; k--) {
         if (!state_visited_[k]) {
@@ -391,6 +326,50 @@ namespace hmm{
       }
     }
 
+    void sample_phi(distributions::rng_t &rng) {
+      for (size_t k = 0; k < K; k++) {
+        sample_phi_row(rng, k);
+      }
+    }
+
+  protected:
+
+    // parameters
+
+    // these three all have the same shape as the data
+    const model_definition defn_;
+    const std::vector<std::vector <size_t> > data_; // XXX: For now, the observation type is just a vector of vectors of ints. Later we can switch over to using recarrays
+    std::vector<std::vector<size_t> > s_; // the state sequence
+    std::vector<std::vector<float> > u_; // the slice sampling parameter for each time step in the series
+
+    // same shape as the transition matrix, or plus one column
+    MatrixXs pi_counts_; // the count of how many times a transition occurs between states. Size K x K.
+    MatrixXf pi_; // the observed portion of the infinite transition matrix. Size K x K+1.
+
+    // same shape as the observation matrix
+    MatrixXs phi_counts_; // count of how many times an observation is seen from a given state. Size K x N.
+    MatrixXf phi_; // the emission matrix. Size K x N.
+
+    std::vector<float> beta_; // the stick lengths for the top-level DP draw. Size K+1.
+    std::vector<bool> state_visited_; // Size K
+
+    // hyperparameters
+    float gamma_;
+    float alpha0_;
+    const std::vector<float> H_; // hyperparameters for a Dirichlet prior over observations. Will generalize this to other observation models later.
+
+    // If true, resample the hyperparameter in each loop
+    bool gamma_flag_, alpha0_flag_; 
+    // Only assigned values if the corresponding flag is true
+    float hyper_gamma_a_, hyper_gamma_b_,
+          hyper_alpha_a_, hyper_alpha_b_;
+
+    // helper fields
+    // Over all instantiated states, the maximum value of the part of pi_k that belongs to the "unseen" states.
+    //Should be smaller than the least value of the auxiliary variable, so all possible states visited by the beam sampler are instantiated
+    float max_pi;
+    size_t K;
+
     void sample_pi_row(distributions::rng_t &rng, size_t i) {
         float new_pi[K+1];
         float alphas[K+1];
@@ -403,12 +382,6 @@ namespace hmm{
           pi_(i,k) = new_pi[k];
         }
         max_pi = max_pi > new_pi[K] ? max_pi : new_pi[K];
-    }
-
-    void sample_phi(distributions::rng_t &rng) {
-      for (size_t k = 0; k < K; k++) {
-        sample_phi_row(rng, k);
-      }
     }
 
     void sample_phi_row(distributions::rng_t &rng, size_t k) {

@@ -4,7 +4,7 @@ cimport numpy as np
 
 cdef class state:
     def __cinit__(self, model_definition defn, **kwargs):
-        valid_kwargs = ('data','alpha','gamma','alpha_a','alpha_b','gamma_a','gamma_b','H','r')
+        valid_kwargs = ('data','H','r')
         validator.validate_kwargs(kwargs, valid_kwargs)
 
         assert 'data' in kwargs
@@ -12,6 +12,7 @@ cdef class state:
         cdef vector[vector[size_t]] c_data = data
 
         assert 'r' in kwargs
+        validator.validate_type(kwargs['r'], rng, param_name='r')
         cdef rng r = kwargs['r']
 
         # some of this should be moved to runner, but for now it's all in state
@@ -21,44 +22,9 @@ cdef class state:
         else:
           H = defn.N() * [1.0]
 
-        cdef float alpha_a, alpha_b, gamma_a, gamma_b
-        cdef bool alpha_flag, gamma_flag
-        if 'alpha' in kwargs:
-          assert 'alpha_a' not in kwargs and 'alpha_b' not in kwargs
-          alpha_a = kwargs['alpha']
-          alpha_b = -1.0
-          assert alpha_a > 0
-        elif 'alpha_a' in kwargs and 'alpha_b' in kwargs:
-          alpha_a = kwargs['alpha_a']
-          alpha_b = kwargs['alpha_b']
-          assert alpha_a > 0 and alpha_b > 0
-        else:
-          assert 'alpha_a' not in kwargs and 'alpha_b' not in kwargs
-          alpha_a = 0.4
-          alpha_b = -1.0
-
-        if 'gamma' in kwargs:
-          assert 'gamma_a' not in kwargs and 'gamma_b' not in kwargs
-          gamma_a = kwargs['gamma']
-          gamma_b = -1.0
-          assert gamma_a > 0
-        elif 'gamma_a' in kwargs and 'gamma_b' in kwargs:
-          gamma_a = kwargs['gamma_a']
-          gamma_b = kwargs['gamma_b']
-          assert gamma_a > 0 and gamma_b > 0
-        else:
-          assert 'gamma_a' not in kwargs and 'gamma_b' not in kwargs
-          gamma_a = 3.8
-          gamma_b = -1.0
-
         self._thisptr.reset(
-          new c_state(defn._thisptr.get()[0], 
-            gamma_a, gamma_b, alpha_a, alpha_b, 
+          new c_state(defn._thisptr.get()[0],
             H, c_data, r._thisptr[0]))
-
-    # This will be moved to runner, but just test it here for now
-    def sample(self, rng r, verbose=False):
-      self._thisptr.get()[0].sample_beam(r._thisptr[0], verbose)
 
     def nstates(self):
       return self._thisptr.get()[0].nstates()
