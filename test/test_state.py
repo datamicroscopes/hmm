@@ -52,7 +52,7 @@ def test_sample_hypers():
   iter = 0
   alphas = []
   gammas = []
-  r.run(rng)
+  r.run(prng)
   # while s.joint_log_likelihood() < -4800: # burn in
   #   s.sample(prng)
   #   print_state(s,iter)

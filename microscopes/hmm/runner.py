@@ -114,9 +114,12 @@ class runner(object):
         validator.validate_positive(niters, param_name='niters')
         for _ in xrange(niters):
             # This goes against every object-oriented bone in my body, but the interface must be satisfied
-            latent._thisptr.get()[0].sample_aux()
-            latent._thisptr.get()[0].sample_state()
-            latent._thisptr.get()[0].clear_empty_states()
-            latent._thisptr.get()[0].sample_hypers(20)
-            latent._thisptr.get()[0].sample_pi()
-            latent._thisptr.get()[0].sample_phi()
+            # And actually Python won't even let me do this because I'm accessing a method in a C++ class...
+            # I'd have to write this whole thing in Cython or change the state interface to expose all these
+            # functions separately...which might actually be worth doing.
+            self._latent._thisptr.get()[0].sample_aux()
+            self._latent._thisptr.get()[0].sample_state()
+            self._latent._thisptr.get()[0].clear_empty_states()
+            self._latent._thisptr.get()[0].sample_hypers(20)
+            self._latent._thisptr.get()[0].sample_pi()
+            self._latent._thisptr.get()[0].sample_phi()
