@@ -320,18 +320,18 @@ void direct_assignment::sample_stick_row(distributions::rng_t &rng, size_t i) {
 
 void direct_assignment::sample_dishes(distributions::rng_t &rng) {
   for (size_t k = 0; k < K; k++) {
-    sample_phi_row(rng, k);
+    sample_dish_row(rng, k);
   }
 }
 
 void direct_assignment::sample_dish_row(distributions::rng_t &rng, size_t k) {
-  float new_phi[defn_.N()];
+  float new_dish[defn_.N()];
   float alphas[defn_.N()];
   for (size_t n = 0; n < defn_.N(); n++) {
-    alphas[n] = phi_counts_(k,n) + H_[n];
+    alphas[n] = dish_suffstats_(k,n) + base_[n];
   }
-  distributions::sample_dirichlet(rng, defn_.N(), alphas, new_phi);
+  distributions::sample_dirichlet(rng, defn_.N(), alphas, new_dish);
   for (size_t n = 0; n < defn_.N(); n++) {
-    phi_(k,n) = new_phi[n];
+    dishes_(k,n) = new_dish[n];
   }
 }
