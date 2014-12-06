@@ -2,14 +2,17 @@
 
 using namespace microscopes::hmm;
 
-float state::joint_log_likelihood() {
+void direct_assignment_representation::recount() {}
+
+float direct_assignment_representation::joint_log_likelihood() {
+  if (!counts_correct) recount();
   float logp = 0.0;
   for (size_t k = 0; k < K; k++) {
     float count_total = alpha0_;
     for (size_t i = 0; i < K; i++) { // transition probabilities
-      count_total += pi_counts_(k,i);
+      count_total += stick_counts_(k,i);
       if (pi_counts_(k,i) + alpha0_ * beta_[k] > 0.0) {
-        logp += distributions::fast_lgamma(pi_counts_(k,i) + alpha0_ * beta_[k])
+        logp += distributions::fast_lgamma(stick_counts_(k,i) + alpha0_ * beta_[k])
               - distributions::fast_lgamma(alpha0_ * beta_[k]);
       }
     }
@@ -19,10 +22,10 @@ float state::joint_log_likelihood() {
     float H_total = 0.0;
     float H_count_total = 0.0;
     for (size_t n = 0; n < defn_.N(); n++) { // emission probabilities
-      H_total       += H_[n];
-      H_count_total += H_[n] + phi_counts_(k,n);
-      logp += distributions::fast_lgamma(H_[n] + phi_counts_(k,n))
-             -distributions::fast_lgamma(H_[n]);
+      H_total       += base_[n];
+      H_count_total += base_[n] + dish_suffstats_(k,n);
+      logp += distributions::fast_lgamma(base_[n] + dish_suffstats_(k,n))
+             -distributions::fast_lgamma(base_[n]);
     }
     logp += distributions::fast_lgamma(H_total)
           - distributions::fast_lgamma(H_count_total);
