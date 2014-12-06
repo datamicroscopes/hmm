@@ -64,10 +64,9 @@ namespace hmm{
     float joint_log_likelihood(const std::vector<std::vector<size_t> > &data,
                                const std::vector<std::vector<size_t> > &states);
     void clear_empty_states();
-    void sample_sticks(distributions::rng_t rng);
-    void sample_hypers(distributions::rng_t rng, bool alpha_flag, bool gamma_flag, size_t niter);
-    void sample_alpha(distributions::rng_t &rng, size_t m, size_t iter);
-    void sample_gamma(distributions::rng_t &rng, size_t m, size_t iter);
+    void sample_sticks(distributions::rng_t &rng);
+    void sample_dishes(distributions::rng_t &rng);
+    void sample_hypers(distributions::rng_t &rng, bool alpha_flag, bool gamma_flag, size_t niter);
   protected:
     std::vector<float> beta_; // the stick lengths for the top-level DP draw. Size K+1.
 
@@ -108,6 +107,10 @@ namespace hmm{
     float max_stick; // the maximum value of sticks_, cached for speed
     bool counts_correct; // safety check to see if the counts are up-to-date
     void recount(); // recomputes stick_counts_ and dish_suffstats
+    void sample_stick_row(distributions::rng_t &rng, size_t i);
+    void sample_dish_row(distributions::rng_t &rng, size_t k);
+    void sample_alpha(distributions::rng_t &rng, size_t m, size_t iter);
+    void sample_gamma(distributions::rng_t &rng, size_t m, size_t iter);
   };
 
   // Maintains the state of an HDP-HMM using the direct assignment representation for an
@@ -178,8 +181,8 @@ namespace hmm{
     // float max_pi;
     // size_t K;
 
-    void sample_pi_row(distributions::rng_t &rng, size_t i);
-    void sample_phi_row(distributions::rng_t &rng, size_t k);
+    // void sample_pi_row(distributions::rng_t &rng, size_t i);
+    // void sample_phi_row(distributions::rng_t &rng, size_t k);
 
     // Resamples the hyperparameter gamma, 
     // not to be confused with distributions::sample_gamma, 
