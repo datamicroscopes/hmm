@@ -33,7 +33,67 @@ namespace hmm{
     size_t N_;
   };
 
-// Implementation of the beam sampler for the HDP-HMM, following van Gael 2008
+  // A class that maintains the direct assignment representation for an HDP,
+  // similar to Teh et al 2006, except with explicit stick lengths for the
+  // lower-level DPs as well.
+  // Contains the data along with functions for hyperparameter sampling
+  class direct_assignment_representation {
+  public:
+    inline float alpha() { return alpha0_; }
+    inline float gamma() { return gamma_; }
+
+    inline void set_alpha_hypers(float hyper_alpha_a, float hyper_alpha_b) {
+      alpha0_flag_ = true;
+      hyper_alpha_a_ = hyper_alpha_a;
+      hyper_alpha_b_ = hyper_alpha_b;
+    }
+
+    inline void set_gamma_hypers(float hyper_gamma_a, float hyper_gamma_b) {
+      gamma_flag_ = true;
+      hyper_gamma_a_ = hyper_gamma_a;
+      hyper_gamma_b_ = hyper_gamma_b;
+    }
+
+    inline void fix_alpha(float alpha0) {
+      alpha0_flag_ = false;
+      alpha0_ = alpha0;
+    }
+
+    inline void fix_gamma(float gamma) {
+      gamma_flag_ = false;
+      gamma_ = gamma;
+    }
+
+    float joint_log_likelihood();
+    void clear_empty_states();
+    void sample_sticks(distributions::rng_t rng);
+    void sample_hypers(distributions::rng_t rng);
+  protected:
+    std::vector<float> beta_; // the stick lengths for the top-level DP draw. Size K+1.
+
+    // The lengths of the lower-level sticks in each context. Each row is one context.
+    // There are K+1 columns and each row sums to one (the last column is all unobserved sticks)
+    MatrixXf sticks_;
+
+    // The count of how many times a sample from each stick is observed in each context.
+    // Each row is one context. There are K columns.
+    MatrixXs stick_counts_; 
+
+    // hyperparameters
+    float gamma_;
+    float alpha0_;
+    // Base distribution of the HDP. In this case,
+    // hyperparameters for a Dirichlet prior over observations. 
+    // Will generalize this to other observation models later.
+    const std::vector<float> base_; 
+
+    // parameters for a gamma hyperprior on gamma_ and alpha0_
+    float hyper_gamma_a_, hyper_gamma_b_,
+          hyper_alpha_a_, hyper_alpha_b_;
+  };
+
+  // Maintains the state of an HDP-HMM using the direct assignment representation for an
+  // HDP, along with the auxilliary variables needed for beam sampling as in Van Gael 2008
   class state {
   public:
     state(const model_definition &defn,
