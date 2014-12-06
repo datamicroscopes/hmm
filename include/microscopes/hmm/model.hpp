@@ -67,6 +67,10 @@ namespace hmm{
     void sample_sticks(distributions::rng_t &rng);
     void sample_dishes(distributions::rng_t &rng);
     void sample_hypers(distributions::rng_t &rng, bool alpha_flag, bool gamma_flag, size_t niter);
+
+    void assign(size_t j, size_t k);
+    void remove(size_t j, size_t k);
+    void clear();
   protected:
     std::vector<float> beta_; // the stick lengths for the top-level DP draw. Size K+1.
 
@@ -105,8 +109,6 @@ namespace hmm{
     // Note, for the HDP-HMM these numbers should always be equal
 
     float max_stick; // the maximum value of sticks_, cached for speed
-    bool counts_correct; // safety check to see if the counts are up-to-date
-    void recount(); // recomputes stick_counts_ and dish_suffstats
     void sample_stick_row(distributions::rng_t &rng, size_t i);
     void sample_dish_row(distributions::rng_t &rng, size_t k);
     void sample_alpha(distributions::rng_t &rng, size_t m, size_t iter);

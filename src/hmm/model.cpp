@@ -9,8 +9,13 @@ direct_assignment(const model_definition &defn,
 // IMPLEMENT
 void direct_assignment::recount() {}
 
+// IMPLEMENT
+void direct_assignment::assign(size_t j, size_t k) {}
+
+// IMPLEMENT
+void direct::assignment::remove(size_t j, size_t k) {}
+
 float direct_assignment::joint_log_likelihood() {
-  if (!counts_correct) recount();
   float logp = 0.0;
   for (size_t k = 0; k < K; k++) {
     float count_total = alpha0_;
