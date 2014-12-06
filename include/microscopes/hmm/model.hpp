@@ -43,6 +43,10 @@ namespace hmm{
                       const std::vector<float> &base,
                       distributions::rng_t &rng);
 
+    inline float stick(size_t group, size_t context) { return sticks_(context, group); }
+    // For general obseration models, should replace this with the score of the data under that dish
+    inline float dish(size_t data, size_t context)   { return dishes_(context, data); }
+
     inline float alpha() { return alpha0_; }
     inline float gamma() { return gamma_; }
     inline size_t nsticks()   { return K; }
@@ -68,8 +72,8 @@ namespace hmm{
     void sample_dishes(distributions::rng_t &rng);
     void sample_hypers(distributions::rng_t &rng, bool alpha_flag, bool gamma_flag, size_t niter);
 
-    void assign(size_t j, size_t k);
-    void remove(size_t j, size_t k);
+    void assign(size_t data, size_t group, size_t context);
+    void remove(size_t data, size_t group, size_t context);
     void clear();
   protected:
     std::vector<float> beta_; // the stick lengths for the top-level DP draw. Size K+1.

@@ -7,13 +7,13 @@ direct_assignment(const model_definition &defn,
                   const std::vector<float> &base,
                   distributions::rng_t &rng) {}
 // IMPLEMENT
-void direct_assignment::recount() {}
+void direct_assignment::clear() {}
 
 // IMPLEMENT
-void direct_assignment::assign(size_t j, size_t k) {}
+void direct_assignment::assign(size_t data, size_t group, size_t context) {}
 
 // IMPLEMENT
-void direct::assignment::remove(size_t j, size_t k) {}
+void direct::assignment::remove(size_t data, size_t group, size_t context) {}
 
 float direct_assignment::joint_log_likelihood() {
   float logp = 0.0;
