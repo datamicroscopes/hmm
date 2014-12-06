@@ -41,33 +41,28 @@ namespace hmm{
   public:
     inline float alpha() { return alpha0_; }
     inline float gamma() { return gamma_; }
+    inline size_t nsticks()   { return K; }
+    inline size_t ncontexts() { return J; }
 
     inline void set_alpha_hypers(float hyper_alpha_a, float hyper_alpha_b) {
-      alpha0_flag_ = true;
       hyper_alpha_a_ = hyper_alpha_a;
       hyper_alpha_b_ = hyper_alpha_b;
     }
 
     inline void set_gamma_hypers(float hyper_gamma_a, float hyper_gamma_b) {
-      gamma_flag_ = true;
       hyper_gamma_a_ = hyper_gamma_a;
       hyper_gamma_b_ = hyper_gamma_b;
     }
 
-    inline void fix_alpha(float alpha0) {
-      alpha0_flag_ = false;
-      alpha0_ = alpha0;
-    }
-
-    inline void fix_gamma(float gamma) {
-      gamma_flag_ = false;
-      gamma_ = gamma;
-    }
+    inline void set_alpha(float alpha0) { alpha0_ = alpha0; }
+    inline void set_gamma(float gamma)  { gamma_  = gamma; }
 
     float joint_log_likelihood();
     void clear_empty_states();
     void sample_sticks(distributions::rng_t rng);
-    void sample_hypers(distributions::rng_t rng);
+    void sample_hypers(distributions::rng_t rng, bool alpha_flag, bool gamma_flag, size_t niter);
+    void sample_alpha(distributions::rng_t &rng, size_t m, size_t iter);
+    void sample_gamma(distributions::rng_t &rng, size_t m, size_t iter);
   protected:
     std::vector<float> beta_; // the stick lengths for the top-level DP draw. Size K+1.
 
@@ -90,6 +85,9 @@ namespace hmm{
     // parameters for a gamma hyperprior on gamma_ and alpha0_
     float hyper_gamma_a_, hyper_gamma_b_,
           hyper_alpha_a_, hyper_alpha_b_;
+
+    size_t K, J; // The number of states currently instantiated, and number of contexts, respectively
+    // Note, for the HDP-HMM these numbers should always be equal
   };
 
   // Maintains the state of an HDP-HMM using the direct assignment representation for an
@@ -105,36 +103,37 @@ namespace hmm{
     inline void get_phi(float * f) { Eigen::Map<MatrixXf>(f, K, defn_.N()) = phi_; }
     inline size_t nstates()        { return K; }
     inline size_t nobs()           { return defn_.N(); }
-    inline float alpha()           { return alpha0_; }
-    inline float gamma()           { return gamma_; }
+    inline float alpha()           { return hdp_.alpha(); }
+    inline float gamma()           { return hdp_.gamma(); }
 
     inline void set_alpha_hypers(float hyper_alpha_a, float hyper_alpha_b) {
       alpha0_flag_ = true;
-      hyper_alpha_a_ = hyper_alpha_a;
-      hyper_alpha_b_ = hyper_alpha_b;
+      hdp_.set_alpha_hypers(hyper_alpha_a, hyper_alpha_b);
     }
 
     inline void set_gamma_hypers(float hyper_gamma_a, float hyper_gamma_b) {
       gamma_flag_ = true;
-      hyper_gamma_a_ = hyper_gamma_a;
-      hyper_gamma_b_ = hyper_gamma_b;
+      hdp_.set_gamma_hypers(hyper_alpha_a, hyper_gamma_b);
     }
 
     inline void fix_alpha(float alpha0) {
       alpha0_flag_ = false;
-      alpha0_ = alpha0;
+      hdp_.set_alpha(alpha0);
     }
 
     inline void fix_gamma(float gamma) {
       gamma_flag_ = false;
-      gamma_ = gamma;
+      hdp_.set_gamma(gamma);
     }
 
     float joint_log_likelihood();
 
     void sample_aux(distributions::rng_t &rng);
     void sample_state(distributions::rng_t &rng);
-    void sample_hypers(distributions::rng_t &rng, size_t niter);
+
+    inline void sample_hypers(distributions::rng_t &rng, size_t niter) {
+      hdp_.sample_hypers(rng, alpha_flag_, gamma_flag_, niter);
+    }
 
     void clear_empty_states();
 
@@ -150,6 +149,7 @@ namespace hmm{
     const std::vector<std::vector <size_t> > data_; // XXX: For now, the observation type is just a vector of vectors of ints. Later we can switch over to using recarrays
     std::vector<std::vector<size_t> > s_; // the state sequence
     std::vector<std::vector<float> > u_; // the slice sampling parameter for each time step in the series
+    direct_assignment_representation hdp_; // the state of the HDP itself
 
     // same shape as the transition matrix, or plus one column
     MatrixXs pi_counts_; // the count of how many times a transition occurs between states. Size K x K.

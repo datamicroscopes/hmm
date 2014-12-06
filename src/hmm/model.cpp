@@ -192,13 +192,13 @@ void state::sample_state(distributions::rng_t &rng) {
   }
 }
 
-void state::sample_hypers(distributions::rng_t &rng, size_t niter) {
+void direct_assignment_representation::sample_hypers(distributions::rng_t &rng, bool alpha_flag, bool gamma_flag, size_t niter) {
   // sample auxiliary variable
   MatrixXs m_ = MatrixXs::Zero(K, K);
   std::uniform_real_distribution<float> sampler (0.0, 1.0);
   for (size_t i = 0; i < K; i++) {
     for (size_t j = 0; j < K; j++) {
-      size_t n_ij = pi_counts_(i,j);
+      size_t n_ij = stick_counts_(i,j);
       if (n_ij > 0) {
         for (size_t l = 0; l < n_ij; l++) {
           if (sampler(rng) < (alpha0_ * beta_[j]) / (alpha0_ * beta_[j] + l))
@@ -222,10 +222,10 @@ void state::sample_hypers(distributions::rng_t &rng, size_t niter) {
   distributions::sample_dirichlet(rng, K+1, alphas, new_beta);
   beta_.assign(new_beta, new_beta + K+1);
 
-  if (gamma_flag_)
+  if (alpha_flag)
+    sample_alpha(rng, m_.sum(), niter);
+  if (gamma_flag)
     sample_gamma(rng, m_.sum(), niter);
-  if (alpha0_flag_)
-    sample_alpha0(rng, m_.sum(), niter);
 }
 
 void state::clear_empty_states() {
@@ -256,7 +256,7 @@ void state::clear_empty_states() {
   }
 }
 
-void state::sample_gamma(distributions::rng_t &rng, size_t m, size_t iter) {
+void direct_assignment_representation::sample_gamma(distributions::rng_t &rng, size_t m, size_t iter) {
   for (size_t i = 0; i < iter; i++) {
     float mu = distributions::sample_beta(rng, gamma_ + 1, m);
     float pi_mu = 1.0 / ( 1.0 + ( m * ( hyper_gamma_b_ - distributions::fast_log(mu) ) ) / ( hyper_gamma_a_ + K - 1 ) );
@@ -270,15 +270,15 @@ void state::sample_gamma(distributions::rng_t &rng, size_t m, size_t iter) {
   }
 }
 
-void state::sample_alpha0(distributions::rng_t &rng, size_t m, size_t iter) {
+void direct_assignment_representation::sample_alpha(distributions::rng_t &rng, size_t m, size_t iter) {
   for (size_t i = 0; i < iter; i++) {
     float w = 0.0;
     int s = 0;
     float p;
-    MatrixXs pi_counts_sum = pi_counts_.rowwise().sum();
+    MatrixXs stick_counts_sum = stick_counts_.rowwise().sum();
     for (size_t k = 0; k < K; k++) {
-      w += distributions::fast_log(distributions::sample_beta(rng, alpha0_ + 1, pi_counts_sum(k,0)));
-      p = pi_counts_sum(k,0) / alpha0_;
+      w += distributions::fast_log(distributions::sample_beta(rng, alpha0_ + 1, stick_counts_sum(k,0)));
+      p = stick_counts_sum(k,0) / alpha0_;
       p /= p + 1;
       s += distributions::sample_bernoulli(rng, p);
       //std::cout << "w[" << k << "]:" << w << ", p[" << k << "]" << p << std::endl;
