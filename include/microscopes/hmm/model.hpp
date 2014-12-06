@@ -37,8 +37,12 @@ namespace hmm{
   // similar to Teh et al 2006, except with explicit stick lengths for the
   // lower-level DPs as well.
   // Contains the data along with functions for hyperparameter sampling
-  class direct_assignment_representation {
+  class direct_assignment {
   public:
+    direct_assignment(const model_definition &defn,
+                      const std::vector<float> &base,
+                      distributions::rng_t &rng);
+
     inline float alpha() { return alpha0_; }
     inline float gamma() { return gamma_; }
     inline size_t nsticks()   { return K; }
@@ -101,6 +105,7 @@ namespace hmm{
     size_t K, J; // The number of states currently instantiated, and number of contexts, respectively
     // Note, for the HDP-HMM these numbers should always be equal
 
+    float max_stick; // the maximum value of sticks_, cached for speed
     bool counts_correct; // safety check to see if the counts are up-to-date
     void recount(); // recomputes stick_counts_ and dish_suffstats
   };
@@ -110,7 +115,7 @@ namespace hmm{
   class state {
   public:
     state(const model_definition &defn,
-          const std::vector<float> &H,
+          const std::vector<float> &base,
           const std::vector<std::vector<size_t> > &data,
           distributions::rng_t &rng);
 
@@ -137,8 +142,8 @@ namespace hmm{
 
     void clear_empty_states();
 
-    void sample_pi(distributions::rng_t &rng);
-    void sample_phi(distributions::rng_t &rng);
+    // void sample_pi(distributions::rng_t &rng);
+    // void sample_phi(distributions::rng_t &rng);
 
   protected:
 
@@ -149,7 +154,7 @@ namespace hmm{
     const std::vector<std::vector <size_t> > data_; // XXX: For now, the observation type is just a vector of vectors of ints. Later we can switch over to using recarrays
     std::vector<std::vector<size_t> > states_; // the state sequence
     std::vector<std::vector<float> > u_; // the slice sampling parameter for each time step in the series
-    direct_assignment_representation hdp_; // the state of the HDP itself
+    direct_assignment hdp_; // the state of the HDP itself
 
     // same shape as the transition matrix, or plus one column
     // MatrixXs pi_counts_; // the count of how many times a transition occurs between states. Size K x K.
@@ -170,7 +175,7 @@ namespace hmm{
     // helper fields
     // Over all instantiated states, the maximum value of the part of pi_k that belongs to the "unseen" states.
     //Should be smaller than the least value of the auxiliary variable, so all possible states visited by the beam sampler are instantiated
-    float max_pi;
+    // float max_pi;
     // size_t K;
 
     void sample_pi_row(distributions::rng_t &rng, size_t i);
@@ -179,8 +184,8 @@ namespace hmm{
     // Resamples the hyperparameter gamma, 
     // not to be confused with distributions::sample_gamma, 
     // which samples from a Gamma distribution
-    void sample_gamma(distributions::rng_t &rng, size_t m, size_t iter);
-    void sample_alpha0(distributions::rng_t &rng, size_t m, size_t iter);
+    // void sample_gamma(distributions::rng_t &rng, size_t m, size_t iter);
+    // void sample_alpha0(distributions::rng_t &rng, size_t m, size_t iter);
   };
 
 } // namespace hmm

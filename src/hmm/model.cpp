@@ -2,9 +2,14 @@
 
 using namespace microscopes::hmm;
 
-void direct_assignment_representation::recount() {}
+// IMPLEMENT
+direct_assignment(const model_definition &defn,
+                  const std::vector<float> &base,
+                  distributions::rng_t &rng) {}
+// IMPLEMENT
+void direct_assignment::recount() {}
 
-float direct_assignment_representation::joint_log_likelihood() {
+float direct_assignment::joint_log_likelihood() {
   if (!counts_correct) recount();
   float logp = 0.0;
   for (size_t k = 0; k < K; k++) {
@@ -50,7 +55,7 @@ void state::sample_aux(distributions::rng_t &rng) {
   }
 
   // If necessary, break the pi stick some more
-  while (max_pi > min_u) {
+  while (max_stick > min_u) {
     // Add new state
     pi_.conservativeResize(K+1,K+2);
     pi_counts_.conservativeResize(K+1,K+1);
@@ -78,14 +83,14 @@ void state::sample_aux(distributions::rng_t &rng) {
     beta_.push_back(bu * (1-bk));
 
     // Add new column to transition matrix
-    max_pi = 0.0;
+    max_stick = 0.0;
     for (size_t i = 0; i < K+1; i++) {
       float pu = pi_(i,K);
       float pk = distributions::sample_beta(rng, alpha0_ * beta_[K], alpha0_ * beta_[K+1]);
       pi_(i,K)   = pu * pk;
       pi_(i,K+1) = pu * (1-pk);
-      max_pi = max_pi > pi_(i,K)   ? max_pi : pi_(i,K);
-      max_pi = max_pi > pi_(i,K+1) ? max_pi : pi_(i,K+1);
+      max_stick = max_stick > pi_(i,K)   ? max_stick : pi_(i,K);
+      max_stick = max_stick > pi_(i,K+1) ? max_stick : pi_(i,K+1);
     }
     K++;
   }
@@ -195,7 +200,7 @@ void state::sample_state(distributions::rng_t &rng) {
   }
 }
 
-void direct_assignment_representation::sample_hypers(distributions::rng_t &rng, bool alpha_flag, bool gamma_flag, size_t niter) {
+void direct_assignment::sample_hypers(distributions::rng_t &rng, bool alpha_flag, bool gamma_flag, size_t niter) {
   // sample auxiliary variable
   MatrixXs m_ = MatrixXs::Zero(K, K);
   std::uniform_real_distribution<float> sampler (0.0, 1.0);
@@ -259,7 +264,7 @@ void state::clear_empty_states() {
   }
 }
 
-void direct_assignment_representation::sample_gamma(distributions::rng_t &rng, size_t m, size_t iter) {
+void direct_assignment::sample_gamma(distributions::rng_t &rng, size_t m, size_t iter) {
   for (size_t i = 0; i < iter; i++) {
     float mu = distributions::sample_beta(rng, gamma_ + 1, m);
     float pi_mu = 1.0 / ( 1.0 + ( m * ( hyper_gamma_b_ - distributions::fast_log(mu) ) ) / ( hyper_gamma_a_ + K - 1 ) );
@@ -273,7 +278,7 @@ void direct_assignment_representation::sample_gamma(distributions::rng_t &rng, s
   }
 }
 
-void direct_assignment_representation::sample_alpha(distributions::rng_t &rng, size_t m, size_t iter) {
+void direct_assignment::sample_alpha(distributions::rng_t &rng, size_t m, size_t iter) {
   for (size_t i = 0; i < iter; i++) {
     float w = 0.0;
     int s = 0;
@@ -292,34 +297,34 @@ void direct_assignment_representation::sample_alpha(distributions::rng_t &rng, s
   }
 }
 
-void state::sample_pi(distributions::rng_t &rng) {
-  max_pi = 0.0;
+void direct_assignment::sample_sticks(distributions::rng_t &rng) {
+  max_stick = 0.0;
   for (size_t k = 0; k < K; k++) {
-    sample_pi_row(rng, k);
+    sample_stick_row(rng, k);
   }
 }
 
-void state::sample_pi_row(distributions::rng_t &rng, size_t i) {
-    float new_pi[K+1];
+void direct_assignment::sample_stick_row(distributions::rng_t &rng, size_t i) {
+    float new_stick[K+1];
     float alphas[K+1];
     for (size_t k = 0; k < K; k++) {
-      alphas[k] = pi_counts_(i,k) + alpha0_ * beta_[k];
+      alphas[k] = stick_counts_(i,k) + alpha0_ * beta_[k];
     }
     alphas[K] = alpha0_ * beta_[K];
-    distributions::sample_dirichlet(rng, K+1, alphas, new_pi);
+    distributions::sample_dirichlet(rng, K+1, alphas, new_stick);
     for (size_t k = 0; k < K+1; k++) {
-      pi_(i,k) = new_pi[k];
+      pi_(i,k) = new_stick[k];
     }
-    max_pi = max_pi > new_pi[K] ? max_pi : new_pi[K];
+    max_stick = max_stick > new_stick[K] ? max_stick : new_stick[K];
 }
 
-void state::sample_phi(distributions::rng_t &rng) {
+void direct_assignment::sample_dishes(distributions::rng_t &rng) {
   for (size_t k = 0; k < K; k++) {
     sample_phi_row(rng, k);
   }
 }
 
-void state::sample_phi_row(distributions::rng_t &rng, size_t k) {
+void direct_assignment::sample_dish_row(distributions::rng_t &rng, size_t k) {
   float new_phi[defn_.N()];
   float alphas[defn_.N()];
   for (size_t n = 0; n < defn_.N(); n++) {
