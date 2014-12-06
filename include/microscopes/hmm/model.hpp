@@ -106,33 +106,18 @@ namespace hmm{
     inline float alpha()           { return hdp_.alpha(); }
     inline float gamma()           { return hdp_.gamma(); }
 
-    inline void set_alpha_hypers(float hyper_alpha_a, float hyper_alpha_b) {
-      alpha0_flag_ = true;
-      hdp_.set_alpha_hypers(hyper_alpha_a, hyper_alpha_b);
-    }
-
-    inline void set_gamma_hypers(float hyper_gamma_a, float hyper_gamma_b) {
-      gamma_flag_ = true;
-      hdp_.set_gamma_hypers(hyper_alpha_a, hyper_gamma_b);
-    }
-
-    inline void fix_alpha(float alpha0) {
-      alpha0_flag_ = false;
-      hdp_.set_alpha(alpha0);
-    }
-
-    inline void fix_gamma(float gamma) {
-      gamma_flag_ = false;
-      hdp_.set_gamma(gamma);
-    }
+    inline void set_alpha_hypers(float a, float b) { hdp_.set_alpha_hypers(a, b); }
+    inline void set_gamma_hypers(float a, float b) { hdp_.set_gamma_hypers(a, b); }
+    inline void set_alpha(float alpha0) { hdp_.set_alpha(alpha0); }
+    inline void set_gamma(float gamma)  { hdp_.set_gamma(gamma); }
 
     float joint_log_likelihood();
 
     void sample_aux(distributions::rng_t &rng);
     void sample_state(distributions::rng_t &rng);
 
-    inline void sample_hypers(distributions::rng_t &rng, size_t niter) {
-      hdp_.sample_hypers(rng, alpha_flag_, gamma_flag_, niter);
+    inline void sample_hypers(distributions::rng_t &rng, bool alpha_flag, bool gamma_flag, size_t niter) { 
+      hdp_.sample_hypers(rng, alpha_flag, gamma_flag, niter);
     }
 
     void clear_empty_states();
@@ -152,32 +137,26 @@ namespace hmm{
     direct_assignment_representation hdp_; // the state of the HDP itself
 
     // same shape as the transition matrix, or plus one column
-    MatrixXs pi_counts_; // the count of how many times a transition occurs between states. Size K x K.
-    MatrixXf pi_; // the observed portion of the infinite transition matrix. Size K x K+1.
+    // MatrixXs pi_counts_; // the count of how many times a transition occurs between states. Size K x K.
+    // MatrixXf pi_; // the observed portion of the infinite transition matrix. Size K x K+1.
 
     // same shape as the observation matrix
     MatrixXs phi_counts_; // count of how many times an observation is seen from a given state. Size K x N.
     MatrixXf phi_; // the emission matrix. Size K x N.
 
-    std::vector<float> beta_; // the stick lengths for the top-level DP draw. Size K+1.
+    // std::vector<float> beta_; // the stick lengths for the top-level DP draw. Size K+1.
     std::vector<bool> state_visited_; // Size K
 
     // hyperparameters
-    float gamma_;
-    float alpha0_;
-    const std::vector<float> H_; // hyperparameters for a Dirichlet prior over observations. Will generalize this to other observation models later.
-
-    // If true, resample the hyperparameter in each loop
-    bool gamma_flag_, alpha0_flag_; 
-    // Only assigned values if the corresponding flag is true
-    float hyper_gamma_a_, hyper_gamma_b_,
-          hyper_alpha_a_, hyper_alpha_b_;
+    // float gamma_;
+    // float alpha0_;
+    // const std::vector<float> H_; // hyperparameters for a Dirichlet prior over observations. Will generalize this to other observation models later.
 
     // helper fields
     // Over all instantiated states, the maximum value of the part of pi_k that belongs to the "unseen" states.
     //Should be smaller than the least value of the auxiliary variable, so all possible states visited by the beam sampler are instantiated
     float max_pi;
-    size_t K;
+    // size_t K;
 
     void sample_pi_row(distributions::rng_t &rng, size_t i);
     void sample_phi_row(distributions::rng_t &rng, size_t k);
