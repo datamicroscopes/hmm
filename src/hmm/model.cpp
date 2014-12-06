@@ -21,7 +21,7 @@ float direct_assignment_representation::joint_log_likelihood() {
 
     float H_total = 0.0;
     float H_count_total = 0.0;
-    for (size_t n = 0; n < defn_.N(); n++) { // emission probabilities
+    for (size_t n = 0; n < base_.size(); n++) { // emission probabilities
       H_total       += base_[n];
       H_count_total += base_[n] + dish_suffstats_(k,n);
       logp += distributions::fast_lgamma(base_[n] + dish_suffstats_(k,n))
@@ -42,9 +42,9 @@ void state::sample_aux(distributions::rng_t &rng) {
       if (j == 0) {
         prev_state = 0;
       } else {
-        prev_state = s_[i][j-1];
+        prev_state = states_[i][j-1];
       }
-      u_[i][j] =  sampler(rng) * (pi_(prev_state,s_[i][j])); // scale the uniform sample to be between 0 and pi_{s_{t-1}s_t}
+      u_[i][j] =  sampler(rng) * (pi_(prev_state, states_[i][j])); // scale the uniform sample to be between 0 and pi_{s_{t-1}s_t}
       min_u = min_u < u_[i][j] ? min_u : u_[i][j];
     }
   }
@@ -97,7 +97,7 @@ state::state(const model_definition &defn,
       distributions::rng_t &rng):
   defn_(defn),
   data_(data),
-  s_(data.size()),
+  states_(data.size()),
   u_(data.size()),
   pi_counts_(MatrixXs::Zero(1,1)),
   pi_(1,2),
@@ -120,7 +120,7 @@ state::state(const model_definition &defn,
   beta_[1] = 0.5; // simple initialization
   state_visited_[0] = true;
   for (size_t i = 0; i < data_.size(); i++) {
-    s_[i] = std::vector<size_t>(data_[i].size());
+    states_[i] = std::vector<size_t>(data_[i].size());
     u_[i] = std::vector<float>(data_[i].size());
     pi_counts_(0,0) += data_[i].size();
     for (size_t j = 0; j < data_[i].size(); j++) {
@@ -173,25 +173,25 @@ void state::sample_state(distributions::rng_t &rng) {
     std::vector<float> likelihoods(K);
     Eigen::Map<Eigen::VectorXf> mapl(&likelihoods[0], K);
     mapl = probs.row(data_[i].size()-1);
-    s_[i][data_[i].size()-1] = distributions::sample_from_likelihoods(rng, likelihoods);
-    state_visited_[s_[i][data_[i].size()-1]] = true;
-    phi_counts_(s_[i][data_[i].size()-1],data_[i][data_[i].size()-1])++;
+    states_[i][data_[i].size()-1] = distributions::sample_from_likelihoods(rng, likelihoods);
+    state_visited_[states_[i][data_[i].size()-1]] = true;
+    phi_counts_(states_[i][data_[i].size()-1],data_[i][data_[i].size()-1])++;
     for (int t = data_[i].size()-1; t > 0; t--) {
       for (size_t k = 0; k < K; k++) {
-        // if (verbose) std::cout << "u: " << u_[i][t] << ", pi: " << pi_(k,s_[i][t]) << std::endl;
-        if (u_[i][t] >= pi_(k,s_[i][t])) {
+        // if (verbose) std::cout << "u: " << u_[i][t] << ", pi: " << pi_(k,states_[i][t]) << std::endl;
+        if (u_[i][t] >= pi_(k,states_[i][t])) {
           probs(t-1,k) = 0;
         }
       }
       mapl = probs.row(t-1);
       // if (verbose) std::cout << "Backward " << t-1 << ": " << likelihoods << std::endl;
-      s_[i][t-1] = distributions::sample_from_likelihoods(rng, likelihoods);
+      states_[i][t-1] = distributions::sample_from_likelihoods(rng, likelihoods);
       // Update counts
-      state_visited_[s_[i][t-1]] = true;
-      pi_counts_(s_[i][t-1],s_[i][t])++;
-      phi_counts_(s_[i][t-1],data_[i][t-1])++;
+      state_visited_[states_[i][t-1]] = true;
+      pi_counts_(states_[i][t-1], states_[i][t])++;
+      phi_counts_(states_[i][t-1], data_[i][t-1])++;
     }
-    pi_counts_(0,s_[i][0])++; // Also add count for state 0, which is the initial state
+    pi_counts_(0, states_[i][0])++; // Also add count for state 0, which is the initial state
   }
 }
 
@@ -251,7 +251,7 @@ void state::clear_empty_states() {
       // we should probably just track which states are "active". This'll do for now.
       for (size_t i = 0; i < data_.size(); i++) {
         for (size_t t = 0; t < data_[i].size(); t++) {
-          if (s_[i][t] > static_cast<size_t>(k)) s_[i][t]--;
+          if (states_[i][t] > static_cast<size_t>(k)) states_[i][t]--;
         }
       }
       K--;

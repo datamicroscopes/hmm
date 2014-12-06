@@ -126,7 +126,7 @@ namespace hmm{
     inline void set_alpha(float alpha0) { hdp_.set_alpha(alpha0); }
     inline void set_gamma(float gamma)  { hdp_.set_gamma(gamma); }
 
-    inline float joint_log_likelihood() { return hdp_.joint_log_likelihood(data_, states_);}
+    inline float joint_log_likelihood() { return hdp_.joint_log_likelihood();}
 
     void sample_aux(distributions::rng_t &rng);
     void sample_state(distributions::rng_t &rng);
