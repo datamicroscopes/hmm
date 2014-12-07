@@ -34,7 +34,7 @@ void direct_assignment::add_context(distributions::rng_t rng) {
   J++;
 }
 
-void direct_assignment::add_stick(distributions::rng_t rng) {
+void direct_assignment::add_group(distributions::rng_t rng) {
   MICROSCOPES_DCHECK(sticks_.rows() == J,   "Sticks Have Incorrect Number of Rows");
   MICROSCOPES_DCHECK(sticks_.cols() == K+1, "Sticks Have Incorrect Number of Cols");
 
@@ -128,7 +128,7 @@ void state::sample_aux(distributions::rng_t &rng) {
   // If necessary, break the pi stick some more
   while (hdp_.max_stick() > min_u) {
     hdp_.add_context();
-    hdp_.add_stick();
+    hdp_.add_group();
   }
 }
 

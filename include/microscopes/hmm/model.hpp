@@ -68,6 +68,8 @@ namespace hmm{
 
     float joint_log_likelihood(const std::vector<std::vector<size_t> > &data,
                                const std::vector<std::vector<size_t> > &states);
+    void add_context(distributions::rngt_t rng);
+    void add_group(distributions::rng_t rng);
     void clear_empty_states();
     void sample_sticks(distributions::rng_t &rng);
     void sample_dishes(distributions::rng_t &rng);
