@@ -156,7 +156,7 @@ namespace hmm{
     const model_definition defn_;
     const std::vector<std::vector <size_t> > data_; // XXX: For now, the observation type is just a vector of vectors of ints. Later we can switch over to using recarrays
     std::vector<std::vector<size_t> > states_; // the state sequence
-    std::vector<std::vector<float> > u_; // the slice sampling parameter for each time step in the series
+    std::vector<std::vector<float> > aux_; // the slice sampling parameter for each time step in the series
     direct_assignment hdp_; // the state of the HDP itself
     std::vector<bool> state_visited_; // Size K
   };

@@ -112,7 +112,7 @@ float direct_assignment::joint_log_likelihood() {
 void state::sample_aux(distributions::rng_t &rng) {
   size_t prev_state;
   std::uniform_real_distribution<float> sampler (0.0, 1.0);
-  float min_u = 1.0; // used to figure out where to truncate sampling of pi
+  float min_aux = 1.0; // used to figure out where to truncate sampling of pi
   for (size_t i = 0; i < data_.size(); i++) {
     for(size_t j = 0; j < data_[i].size(); j++) {
       if (j == 0) {
@@ -120,13 +120,13 @@ void state::sample_aux(distributions::rng_t &rng) {
       } else {
         prev_state = states_[i][j-1];
       }
-      u_[i][j] =  sampler(rng) * (pi_(prev_state, states_[i][j])); // scale the uniform sample to be between 0 and pi_{s_{t-1}s_t}
-      min_u = min_u < u_[i][j] ? min_u : u_[i][j];
+      aux_[i][j] =  sampler(rng) * (pi_(prev_state, states_[i][j])); // scale the uniform sample to be between 0 and pi_{s_{t-1}s_t}
+      min_aux = min_aux < aux_[i][j] ? min_aux : aux_[i][j];
     }
   }
 
   // If necessary, break the pi stick some more
-  while (hdp_.max_stick() > min_u) {
+  while (hdp_.max_stick() > min_aux) {
     hdp_.add_context();
     hdp_.add_group();
   }
@@ -139,7 +139,7 @@ state::state(const model_definition &defn,
   defn_(defn),
   data_(data),
   states_(data.size()),
-  u_(data.size()),
+  aux_(data.size()),
   pi_counts_(MatrixXs::Zero(1,1)),
   pi_(1,2),
   phi_counts_(MatrixXs::Zero(1,H.size())),
@@ -162,7 +162,7 @@ state::state(const model_definition &defn,
   state_visited_[0] = true;
   for (size_t i = 0; i < data_.size(); i++) {
     states_[i] = std::vector<size_t>(data_[i].size());
-    u_[i] = std::vector<float>(data_[i].size());
+    aux_[i] = std::vector<float>(data_[i].size());
     pi_counts_(0,0) += data_[i].size();
     for (size_t j = 0; j < data_[i].size(); j++) {
       phi_counts_(0,data_[i][j])++;
@@ -183,12 +183,12 @@ void state::sample_state(distributions::rng_t &rng) {
       float total_prob = 0.0;
       for (size_t k = 0; k < K; k++) {
         if (t == 0) {
-          probs(t,k) = phi_(k,data_[i][t]) * (u_[i][t] <= pi_(0,k) ? 1.0 : 0.0);
+          probs(t,k) = phi_(k,data_[i][t]) * (aux_[i][t] <= pi_(0,k) ? 1.0 : 0.0);
         }
         else {
           probs(t,k) = 0.0;
           for (size_t l = 0; l < K; l++) {
-            if (u_[i][t] <= pi_(l,k)) {
+            if (aux_[i][t] <= pi_(l,k)) {
               probs(t,k) += probs(t-1,l);
             }
           }
@@ -219,8 +219,8 @@ void state::sample_state(distributions::rng_t &rng) {
     phi_counts_(states_[i][data_[i].size()-1],data_[i][data_[i].size()-1])++;
     for (int t = data_[i].size()-1; t > 0; t--) {
       for (size_t k = 0; k < K; k++) {
-        // if (verbose) std::cout << "u: " << u_[i][t] << ", pi: " << pi_(k,states_[i][t]) << std::endl;
-        if (u_[i][t] >= pi_(k,states_[i][t])) {
+        // if (verbose) std::cout << "u: " << aux_[i][t] << ", pi: " << pi_(k,states_[i][t]) << std::endl;
+        if (aux_[i][t] >= pi_(k,states_[i][t])) {
           probs(t-1,k) = 0;
         }
       }
