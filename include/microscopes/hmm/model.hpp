@@ -77,7 +77,10 @@ namespace hmm{
 
     void assign(size_t data, size_t group, size_t context);
     void remove(size_t data, size_t group, size_t context);
-    void clear();
+    inline void clear() {
+      stick_counts_   = MatrixXs::Zero(J,K);
+      dish_suffstats_ = MatrixXs::Zero(K,base_.size());
+    }
   protected:
     std::vector<float> beta_; // the stick lengths for the top-level DP draw. Size K+1.
 

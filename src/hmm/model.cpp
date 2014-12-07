@@ -6,8 +6,6 @@ using namespace microscopes::hmm;
 direct_assignment(const model_definition &defn,
                   const std::vector<float> &base,
                   distributions::rng_t &rng) {}
-// IMPLEMENT
-void direct_assignment::clear() {}
 
 // IMPLEMENT
 void direct_assignment::assign(size_t data, size_t group, size_t context) {
@@ -120,7 +118,7 @@ void state::sample_aux(distributions::rng_t &rng) {
       } else {
         prev_state = states_[i][j-1];
       }
-      aux_[i][j] =  sampler(rng) * (pi_(prev_state, states_[i][j])); // scale the uniform sample to be between 0 and pi_{s_{t-1}s_t}
+      aux_[i][j] =  sampler(rng) * (hdp_.stick(states_[i][j], prev_state)); // scale the uniform sample to be between 0 and pi_{s_{t-1}s_t}
       min_aux = min_aux < aux_[i][j] ? min_aux : aux_[i][j];
     }
   }
@@ -173,8 +171,7 @@ state::state(const model_definition &defn,
 }
 
 void state::sample_state(distributions::rng_t &rng) {
-  pi_counts_ = MatrixXs::Zero(K,K); // clear counts
-  phi_counts_ = MatrixXs::Zero(K,defn_.N());
+  hdp_.clear();
   state_visited_ = std::vector<bool>(K);
   for (size_t i = 0; i < data_.size(); i++) {
     // Forward-filter
