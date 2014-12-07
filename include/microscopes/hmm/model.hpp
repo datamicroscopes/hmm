@@ -151,53 +151,14 @@ namespace hmm{
     inline void sample_hypers(distributions::rng_t &rng, bool alpha_flag, bool gamma_flag, size_t niter) { 
       hdp_.sample_hypers(rng, alpha_flag, gamma_flag, niter);
     }
-
     void clear_empty_states();
-
-    // void sample_pi(distributions::rng_t &rng);
-    // void sample_phi(distributions::rng_t &rng);
-
   protected:
-
-    // parameters
-
-    // these three all have the same shape as the data
     const model_definition defn_;
     const std::vector<std::vector <size_t> > data_; // XXX: For now, the observation type is just a vector of vectors of ints. Later we can switch over to using recarrays
     std::vector<std::vector<size_t> > states_; // the state sequence
     std::vector<std::vector<float> > u_; // the slice sampling parameter for each time step in the series
     direct_assignment hdp_; // the state of the HDP itself
-
-    // same shape as the transition matrix, or plus one column
-    // MatrixXs pi_counts_; // the count of how many times a transition occurs between states. Size K x K.
-    // MatrixXf pi_; // the observed portion of the infinite transition matrix. Size K x K+1.
-
-    // same shape as the observation matrix
-    // MatrixXs phi_counts_; // count of how many times an observation is seen from a given state. Size K x N.
-    // MatrixXf phi_; // the emission matrix. Size K x N.
-
-    // std::vector<float> beta_; // the stick lengths for the top-level DP draw. Size K+1.
     std::vector<bool> state_visited_; // Size K
-
-    // hyperparameters
-    // float gamma_;
-    // float alpha0_;
-    // const std::vector<float> H_; // hyperparameters for a Dirichlet prior over observations. Will generalize this to other observation models later.
-
-    // helper fields
-    // Over all instantiated states, the maximum value of the part of pi_k that belongs to the "unseen" states.
-    //Should be smaller than the least value of the auxiliary variable, so all possible states visited by the beam sampler are instantiated
-    // float max_pi;
-    // size_t K;
-
-    // void sample_pi_row(distributions::rng_t &rng, size_t i);
-    // void sample_phi_row(distributions::rng_t &rng, size_t k);
-
-    // Resamples the hyperparameter gamma, 
-    // not to be confused with distributions::sample_gamma, 
-    // which samples from a Gamma distribution
-    // void sample_gamma(distributions::rng_t &rng, size_t m, size_t iter);
-    // void sample_alpha0(distributions::rng_t &rng, size_t m, size_t iter);
   };
 
 } // namespace hmm
