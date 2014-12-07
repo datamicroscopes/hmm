@@ -51,6 +51,7 @@ namespace hmm{
     inline float gamma() { return gamma_; }
     inline size_t nsticks()   { return K; }
     inline size_t ncontexts() { return J; }
+    inline float max_stick() { return max_stick; }
 
     inline void set_alpha_hypers(float hyper_alpha_a, float hyper_alpha_b) {
       hyper_alpha_a_ = hyper_alpha_a;

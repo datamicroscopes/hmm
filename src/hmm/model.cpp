@@ -10,10 +10,76 @@ direct_assignment(const model_definition &defn,
 void direct_assignment::clear() {}
 
 // IMPLEMENT
-void direct_assignment::assign(size_t data, size_t group, size_t context) {}
+void direct_assignment::assign(size_t data, size_t group, size_t context) {
+}
 
 // IMPLEMENT
 void direct::assignment::remove(size_t data, size_t group, size_t context) {}
+
+void direct_assignment::add_context(distributions::rng_t rng) {
+  MICROSCOPES_DCHECK(sticks_.rows() == J, "Sticks Have Incorrect Number of Rows");
+  MICROSCOPES_DCHECK(sticks_.cols() == K+1, "Sticks Have Incorrect Number of Cols");
+
+  MICROSCOPES_DCHECK(stick_counts_.rows() == J, "Stick Counts Have Incorrect Number of Rows");
+  MICROSCOPES_DCHECK(stick_counts_.cols() == K, "Stick Counts Have Incorrect Number of Cols");
+
+  sticks_.conservativeResize(J+1,K+1);
+  stick_counts_.conservativeResize(J+1,K);
+
+  for (size_t i = 0; i < K; i++) {
+    stick_counts_(J,i) = 0;
+  }
+  sample_stick_row(rng, J);
+  MICROSCOPES_DCHECK(std::abs(1.0 - sticks_.block(J,0,1,K).sum()) < 1e-5, "Transition matrix row does not sum to one");
+  J++;
+}
+
+void direct_assignment::add_stick(distributions::rng_t rng) {
+  MICROSCOPES_DCHECK(sticks_.rows() == J,   "Sticks Have Incorrect Number of Rows");
+  MICROSCOPES_DCHECK(sticks_.cols() == K+1, "Sticks Have Incorrect Number of Cols");
+
+  MICROSCOPES_DCHECK(stick_counts_.rows() == J, "Stick Counts Have Incorrect Number of Rows");
+  MICROSCOPES_DCHECK(stick_counts_.cols() == K, "Stick Counts Have Incorrect Number of Cols");
+
+  MICROSCOPES_DCHECK(dishes_.rows() == K, "Incorrect Number of Dishes");
+  MICROSCOPES_DCHECK(dishes_.cols() == base_.size(), "Dishes Has Incorrect Number of Cols");
+
+  MICROSCOPES_DCHECK(dish_suffstats_.rows() == K, "Dish Suff Stats Has Incorrect Number of Rows");
+  MICROSCOPES_DCHECK(dish_suffstats_.cols() == N, "Dish Suff Stats Has Incorrect Number of Cols");
+
+  sticks_.conservativeResize(J,K+2);
+  stick_counts_.conservativeResize(J,K+1);
+
+  for (size_t i = 0; i < J; i++) {
+    stick_counts_(i,K) = 0;
+  }
+
+  dishes_.conservativeResize(K+1, base_.size());
+  dish_suffstats_.conservativeResize(K+1, base_.size());
+
+  for (size_t i = 0; i < base_.size(); i++) {
+    dish_suffstats_(K,i) = 0;
+  }
+  sample_dish_row(rng, K);
+
+  // Break beta stick
+  float bu = beta_[K];
+  float bk = distributions::sample_beta(rng, 1.0, gamma_);
+  beta_[K] = bu * bk;
+  beta_.push_back(bu * (1-bk));
+
+  // Add new column to transition matrix
+  max_stick = 0.0;
+  for (size_t i = 0; i < J; i++) {
+    float pu = sticks_(i,K);
+    float pk = distributions::sample_beta(rng, alpha0_ * beta_[K], alpha0_ * beta_[K+1]);
+    pi_(i,K)   = pu * pk;
+    pi_(i,K+1) = pu * (1-pk);
+    max_stick = max_stick > sticks_(i,K)   ? max_stick : sticks_(i,K);
+    max_stick = max_stick > sticks_(i,K+1) ? max_stick : sticks_(i,K+1);
+  }
+  K++;
+}
 
 float direct_assignment::joint_log_likelihood() {
   float logp = 0.0;
@@ -60,44 +126,9 @@ void state::sample_aux(distributions::rng_t &rng) {
   }
 
   // If necessary, break the pi stick some more
-  while (max_stick > min_u) {
-    // Add new state
-    pi_.conservativeResize(K+1,K+2);
-    pi_counts_.conservativeResize(K+1,K+1);
-
-    phi_.conservativeResize(K+1,defn_.N());
-    phi_counts_.conservativeResize(K+1,defn_.N());
-
-    for (size_t i = 0; i < K+1; i++) { // Set new counts to zero
-      pi_counts_(i,K) = 0;
-      pi_counts_(K,i) = 0;
-    }
-
-    for (size_t i = 0; i < defn_.N(); i++) {
-      phi_counts_(K,i) = 0;
-    }
-
-    sample_pi_row(rng, K);
-    MICROSCOPES_DCHECK(std::abs(1.0 - pi_.block(K,0,1,K).sum()) < 1e-5, "Transition matrix row does not sum to one");
-    sample_phi_row(rng, K);
-
-    // Break beta stick
-    float bu = beta_[K];
-    float bk = distributions::sample_beta(rng, 1.0, gamma_);
-    beta_[K] = bu * bk;
-    beta_.push_back(bu * (1-bk));
-
-    // Add new column to transition matrix
-    max_stick = 0.0;
-    for (size_t i = 0; i < K+1; i++) {
-      float pu = pi_(i,K);
-      float pk = distributions::sample_beta(rng, alpha0_ * beta_[K], alpha0_ * beta_[K+1]);
-      pi_(i,K)   = pu * pk;
-      pi_(i,K+1) = pu * (1-pk);
-      max_stick = max_stick > pi_(i,K)   ? max_stick : pi_(i,K);
-      max_stick = max_stick > pi_(i,K+1) ? max_stick : pi_(i,K+1);
-    }
-    K++;
+  while (hdp_.max_stick() > min_u) {
+    hdp_.add_context();
+    hdp_.add_stick();
   }
 }
 
@@ -318,7 +349,7 @@ void direct_assignment::sample_stick_row(distributions::rng_t &rng, size_t i) {
     alphas[K] = alpha0_ * beta_[K];
     distributions::sample_dirichlet(rng, K+1, alphas, new_stick);
     for (size_t k = 0; k < K+1; k++) {
-      pi_(i,k) = new_stick[k];
+      sticks_(i,k) = new_stick[k];
     }
     max_stick = max_stick > new_stick[K] ? max_stick : new_stick[K];
 }
