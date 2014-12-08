@@ -4,7 +4,7 @@ cimport numpy as np
 
 cdef class state:
     def __cinit__(self, model_definition defn, **kwargs):
-        valid_kwargs = ('data','H','r')
+        valid_kwargs = ('data','base','r')
         validator.validate_kwargs(kwargs, valid_kwargs)
 
         assert 'data' in kwargs
@@ -17,14 +17,14 @@ cdef class state:
 
         # some of this should be moved to runner, but for now it's all in state
         cdef vector[float] H
-        if 'H' in kwargs:
-          H = kwargs['H']
+        if 'base' in kwargs:
+          base = kwargs['base']
         else:
-          H = defn.N() * [1.0]
+          base = defn.N() * [1.0]
 
         self._thisptr.reset(
           new c_state(defn._thisptr.get()[0],
-            H, c_data, r._thisptr[0]))
+            base, c_data, r._thisptr[0]))
 
     def nstates(self):
       return self._thisptr.get()[0].nstates()
@@ -44,11 +44,11 @@ cdef class state:
     def set_gamma_hypers(self, float gamma_a, float gamma_b):
       self._thisptr.get()[0].set_gamma_hypers(gamma_a, gamma_b)
 
-    def fix_alpha(self, float alpha):
-      self._thisptr.get()[0].fix_alpha(alpha)
+    def set_alpha(self, float alpha):
+      self._thisptr.get()[0].set_alpha(alpha)
 
-    def fix_gamma(self, float gamma):
-      self._thisptr.get()[0].fix_gamma(gamma)
+    def set_gamma(self, float gamma):
+      self._thisptr.get()[0].set_gamma(gamma)
 
     def sample_hypers(self, rng r, niter=20):
       self._thisptr.get()[0].sample_hypers(r._thisptr[0],niter)
