@@ -2,8 +2,7 @@
 
 using namespace microscopes::hmm;
 
-direct_assignment::direct_assignment(const model_definition &defn,
-                                     const float gamma_a,
+direct_assignment::direct_assignment(const float gamma_a,
                                      const float gamma_b,
                                      const float alpha_a,
                                      const float alpha_b,
@@ -23,10 +22,9 @@ hyper_gamma_a_(gamma_a),
 hyper_gamma_b_(gamma_b),
 hyper_alpha_a_(alpha_a),
 hyper_alpha_b_(alpha_b),
-K(init_states),
+K(init_groups),
 J(init_contexts)
 {
-  MICROSCOPES_DCHECK(base.size() == defn.N(), "Number of hyperparameters must match vocabulary size.");
   for (size_t i = 0; i <= init_groups; i++) { // simple initialization 
     beta_[i] = 1.0 / beta_.size();
   }
@@ -41,24 +39,30 @@ void direct_assignment::assign(size_t data, size_t group, size_t context) {
   dish_suffstats_(group, data)++;
 }
 
-void direct::assignment::remove(size_t data, size_t group, size_t context) {
+void direct_assignment::remove(size_t data, size_t group, size_t context) {
   MICROSCOPES_DCHECK(data < base_.size(), "Data is out of range");
   MICROSCOPES_DCHECK(group < K, "Group is out of range");
   MICROSCOPES_DCHECK(context < J, "Context is out of range");
 
-  MICROSCOPES_DCHECK(stick_counts_(context, group) > 0, "Cannot remove count from group");
+  MICROSCOPES_DCHECK(stick_counts_(context, group) > 0, 
+    "Cannot remove count from group");
   stick_counts_(context, group)--;
 
-  MICROSCOPES_DCHECK(dish_suffstats_(group, data) > 0, "Cannot remove count from sufficient statistics");
+  MICROSCOPES_DCHECK(dish_suffstats_(group, data) > 0, 
+    "Cannot remove count from sufficient statistics");
   dish_suffstats_(group, data)--;
 }
 
 void direct_assignment::add_context(distributions::rng_t rng) {
-  MICROSCOPES_DCHECK(sticks_.rows() == J, "Sticks Have Incorrect Number of Rows");
-  MICROSCOPES_DCHECK(sticks_.cols() == K+1, "Sticks Have Incorrect Number of Cols");
+  MICROSCOPES_DCHECK(sticks_.rows() == (long)J, 
+    "Sticks Have Incorrect Number of Rows");
+  MICROSCOPES_DCHECK(sticks_.cols() == (long)K+1, 
+    "Sticks Have Incorrect Number of Cols");
 
-  MICROSCOPES_DCHECK(stick_counts_.rows() == J, "Stick Counts Have Incorrect Number of Rows");
-  MICROSCOPES_DCHECK(stick_counts_.cols() == K, "Stick Counts Have Incorrect Number of Cols");
+  MICROSCOPES_DCHECK(stick_counts_.rows() == (long)J, 
+    "Stick Counts Have Incorrect Number of Rows");
+  MICROSCOPES_DCHECK(stick_counts_.cols() == (long)K, 
+    "Stick Counts Have Incorrect Number of Cols");
 
   sticks_.conservativeResize(J+1,K+1);
   stick_counts_.conservativeResize(J+1,K);
@@ -67,22 +71,31 @@ void direct_assignment::add_context(distributions::rng_t rng) {
     stick_counts_(J,i) = 0;
   }
   sample_stick_row(rng, J);
-  MICROSCOPES_DCHECK(std::abs(1.0 - sticks_.block(J,0,1,K).sum()) < 1e-5, "Transition matrix row does not sum to one");
+  MICROSCOPES_DCHECK(std::abs(1.0 - sticks_.block(J,0,1,K).sum()) < 1e-5, 
+    "Transition matrix row does not sum to one");
   J++;
 }
 
 void direct_assignment::add_group(distributions::rng_t rng) {
-  MICROSCOPES_DCHECK(sticks_.rows() == J,   "Sticks Have Incorrect Number of Rows");
-  MICROSCOPES_DCHECK(sticks_.cols() == K+1, "Sticks Have Incorrect Number of Cols");
+  MICROSCOPES_DCHECK(sticks_.rows() == (long)J,   
+    "Sticks Have Incorrect Number of Rows");
+  MICROSCOPES_DCHECK(sticks_.cols() == (long)K+1, 
+    "Sticks Have Incorrect Number of Cols");
 
-  MICROSCOPES_DCHECK(stick_counts_.rows() == J, "Stick Counts Have Incorrect Number of Rows");
-  MICROSCOPES_DCHECK(stick_counts_.cols() == K, "Stick Counts Have Incorrect Number of Cols");
+  MICROSCOPES_DCHECK(stick_counts_.rows() == (long)J, 
+    "Stick Counts Have Incorrect Number of Rows");
+  MICROSCOPES_DCHECK(stick_counts_.cols() == (long)K, 
+    "Stick Counts Have Incorrect Number of Cols");
 
-  MICROSCOPES_DCHECK(dishes_.rows() == K, "Incorrect Number of Dishes");
-  MICROSCOPES_DCHECK(dishes_.cols() == base_.size(), "Dishes Has Incorrect Number of Cols");
+  MICROSCOPES_DCHECK(dishes_.rows() == (long)K, 
+    "Incorrect Number of Dishes");
+  MICROSCOPES_DCHECK(dishes_.cols() == (long)base_.size(), 
+    "Dishes Has Incorrect Number of Cols");
 
-  MICROSCOPES_DCHECK(dish_suffstats_.rows() == K, "Dish Suff Stats Has Incorrect Number of Rows");
-  MICROSCOPES_DCHECK(dish_suffstats_.cols() == N, "Dish Suff Stats Has Incorrect Number of Cols");
+  MICROSCOPES_DCHECK(dish_suffstats_.rows() == (long)K, 
+    "Dish Suff Stats Has Incorrect Number of Rows");
+  MICROSCOPES_DCHECK(dish_suffstats_.cols() == (long)base_.size(), 
+    "Dish Suff Stats Has Incorrect Number of Cols");
 
   sticks_.conservativeResize(J,K+2);
   stick_counts_.conservativeResize(J,K+1);
@@ -110,8 +123,8 @@ void direct_assignment::add_group(distributions::rng_t rng) {
   for (size_t i = 0; i < J; i++) {
     float pu = sticks_(i,K);
     float pk = distributions::sample_beta(rng, alpha0_ * beta_[K], alpha0_ * beta_[K+1]);
-    pi_(i,K)   = pu * pk;
-    pi_(i,K+1) = pu * (1-pk);
+    sticks_(i,K)   = pu * pk;
+    sticks_(i,K+1) = pu * (1-pk);
     max_stick = max_stick > sticks_(i,K)   ? max_stick : sticks_(i,K);
     max_stick = max_stick > sticks_(i,K+1) ? max_stick : sticks_(i,K+1);
   }
@@ -136,7 +149,7 @@ void direct_assignment::remove_group(size_t group) {
 
   sticks_.col(K) += sticks_.col(group);
   common::util::remove_column<float>(sticks_, group);
-  common::util::remove_column<size_t>(stick_counts, group);
+  common::util::remove_column<size_t>(stick_counts_, group);
 
   K--;
 }
@@ -147,7 +160,7 @@ float direct_assignment::joint_log_likelihood() {
     float count_total = alpha0_;
     for (size_t i = 0; i < K; i++) { // transition probabilities
       count_total += stick_counts_(k,i);
-      if (pi_counts_(k,i) + alpha0_ * beta_[k] > 0.0) {
+      if (stick_counts_(k,i) + alpha0_ * beta_[k] > 0.0) {
         logp += distributions::fast_lgamma(stick_counts_(k,i) + alpha0_ * beta_[k])
               - distributions::fast_lgamma(alpha0_ * beta_[k]);
       }
@@ -233,13 +246,13 @@ void direct_assignment::sample_stick_row(distributions::rng_t &rng, size_t i) {
 }
 
 void direct_assignment::sample_dish_row(distributions::rng_t &rng, size_t k) {
-  float new_dish[defn_.N()];
-  float alphas[defn_.N()];
-  for (size_t n = 0; n < defn_.N(); n++) {
+  float new_dish[base_.size()];
+  float alphas[base_.size()];
+  for (size_t n = 0; n < base_.size(); n++) {
     alphas[n] = dish_suffstats_(k,n) + base_[n];
   }
-  distributions::sample_dirichlet(rng, defn_.N(), alphas, new_dish);
-  for (size_t n = 0; n < defn_.N(); n++) {
+  distributions::sample_dirichlet(rng, base_.size(), alphas, new_dish);
+  for (size_t n = 0; n < base_.size(); n++) {
     dishes_(k,n) = new_dish[n];
   }
 }
@@ -277,30 +290,6 @@ void direct_assignment::sample_gamma(distributions::rng_t &rng, size_t m, size_t
   }
 }
 
-void state::sample_aux(distributions::rng_t &rng) {
-  size_t prev_state;
-  std::uniform_real_distribution<float> sampler (0.0, 1.0);
-  float min_aux = 1.0; // used to figure out where to truncate sampling of pi
-  for (size_t i = 0; i < data_.size(); i++) {
-    for(size_t j = 0; j < data_[i].size(); j++) {
-      if (j == 0) {
-        prev_state = 0;
-      } else {
-        prev_state = states_[i][j-1];
-      }
-      aux_[i][j] =  sampler(rng) * (hdp_.stick(states_[i][j], prev_state)); // scale the uniform sample to be between 0 and pi_{s_{t-1}s_t}
-      min_aux = min_aux < aux_[i][j] ? min_aux : aux_[i][j];
-    }
-  }
-
-  // If necessary, break the pi stick some more
-  while (hdp_.max_stick() > min_aux) {
-    hdp_.add_context();
-    hdp_.add_group();
-  }
-}
-
-// FIX ME
 state::state(const model_definition &defn,
              const float gamma_a,
              const float gamma_b,
@@ -314,9 +303,8 @@ defn_(defn),
 data_(data),
 states_(data.size()),
 aux_(data.size()),
-hdp_(defn, gamma_a, gamma_b, alpha_a, alpha_b, base, rng, init_states, init_states),
-state_visited_(init_states),
-H_(H),
+hdp_(gamma_a, gamma_b, alpha_a, alpha_b, base, rng, init_states, init_states),
+state_visited_(init_states)
 {
   MICROSCOPES_DCHECK(base.size() == defn_.N(), "Number of hyperparameters must match vocabulary size.");
   state_visited_[0] = true;
@@ -388,8 +376,31 @@ void state::sample_state(distributions::rng_t &rng) {
   }
 }
 
+void state::sample_aux(distributions::rng_t &rng) {
+  size_t prev_state;
+  std::uniform_real_distribution<float> sampler (0.0, 1.0);
+  float min_aux = 1.0; // used to figure out where to truncate sampling of pi
+  for (size_t i = 0; i < data_.size(); i++) {
+    for(size_t j = 0; j < data_[i].size(); j++) {
+      if (j == 0) {
+        prev_state = 0;
+      } else {
+        prev_state = states_[i][j-1];
+      }
+      aux_[i][j] =  sampler(rng) * (hdp_.stick(states_[i][j], prev_state)); // scale the uniform sample to be between 0 and pi_{s_{t-1}s_t}
+      min_aux = min_aux < aux_[i][j] ? min_aux : aux_[i][j];
+    }
+  }
+
+  // If necessary, break the pi stick some more
+  while (hdp_.get_max_stick() > min_aux) {
+    hdp_.add_context(rng);
+    hdp_.add_group(rng);
+  }
+}
+
 void state::clear_empty_states() {
-  for (ssize_t k = K-1; k >= 0; k--) {
+  for (ssize_t k = nstates()-1; k >= 0; k--) {
     if (!state_visited_[k]) {
       hdp_.remove_context(k);
       hdp_.remove_group(k);

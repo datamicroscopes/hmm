@@ -39,8 +39,7 @@ namespace hmm{
   // Contains the data along with functions for hyperparameter sampling
   class direct_assignment {
   public:
-    direct_assignment(const model_definition &defn,
-                      const float gamma_a,
+    direct_assignment(const float gamma_a,
                       const float gamma_b,
                       const float alpha_a,
                       const float alpha_b,
@@ -57,7 +56,10 @@ namespace hmm{
     inline float gamma() { return gamma_; }
     inline size_t ngroups()   { return K; }
     inline size_t ncontexts() { return J; }
-    inline float max_stick() { return max_stick; }
+    inline float get_max_stick() { return max_stick; }
+
+    inline void get_sticks(float * f) { Eigen::Map<MatrixXf>(f, J, K+1)          = sticks_; }
+    inline void get_dishes(float * f) { Eigen::Map<MatrixXf>(f, K, base_.size()) = dishes_; }
 
     inline void set_alpha_hypers(float hyper_alpha_a, float hyper_alpha_b) {
       hyper_alpha_a_ = hyper_alpha_a;
@@ -80,7 +82,7 @@ namespace hmm{
     void assign(size_t data, size_t group, size_t context);
     void remove(size_t data, size_t group, size_t context);
 
-    void add_context(distributions::rngt_t rng);
+    void add_context(distributions::rng_t rng);
     void add_group(distributions::rng_t rng);
 
     void remove_context(size_t context);
@@ -149,8 +151,8 @@ namespace hmm{
           distributions::rng_t &rng,
           const size_t init_states);
 
-    inline void get_pi(float * f)  { Eigen::Map<MatrixXf>(f, K, K+1)       = pi_; }
-    inline void get_phi(float * f) { Eigen::Map<MatrixXf>(f, K, defn_.N()) = phi_; }
+    inline void get_sticks(float * f) { hdp_.get_sticks(f); }
+    inline void get_dishes(float * f) { hdp_.get_dishes(f); }
     inline size_t nstates()        { return hdp_.ngroups(); }
     inline size_t nobs()           { return defn_.N(); }
     inline float alpha()           { return hdp_.alpha(); }
