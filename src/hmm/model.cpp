@@ -94,11 +94,26 @@ void direct_assignment::add_group(distributions::rng_t rng) {
 }
 
 void remove_context(size_t context) {
-
+  MICROSCOPES_DCHECK(context < J, "Cannot remove context out of range");
+  common::util::remove_row<float>(sticks_, context);
+  common::util::remove_row<size_t>(stick_counts_, context);
+  J--;
 }
 
 void remove_group(size_t group) {
-  
+  MICROSCOPES_DCHECK(group < K, "Cannot remove group out of range");
+
+  beta_[K] += beta_[group];
+  beta_.erase(beta_.begin() + group);
+
+  common::util::remove_row<float>(dishes_, group);
+  common::util::remove_row<size_t>(dish_suffstats_, group);
+
+  sticks_.col(K) += sticks_.col(group);
+  common::util::remove_column<float>(sticks_, group);
+  common::util::remove_column<size_t>(stick_counts, group);
+
+  K--;
 }
 
 float direct_assignment::joint_log_likelihood() {
@@ -353,22 +368,11 @@ void state::sample_state(distributions::rng_t &rng) {
   }
 }
 
-// FIX ME
 void state::clear_empty_states() {
   for (ssize_t k = K-1; k >= 0; k--) {
     if (!state_visited_[k]) {
-      beta_[K] += beta_[k];
-      beta_.erase(beta_.begin()+k);
-
-      common::util::remove_row<float>(phi_, k);
-      common::util::remove_row<size_t>(phi_counts_, k);
-
-      common::util::remove_row<float>(pi_, k);
-      common::util::remove_row<size_t>(pi_counts_, k);
-
-      pi_.col(K) += pi_.col(k);
-      common::util::remove_column<float>(pi_, k);
-      common::util::remove_column<size_t>(pi_counts_, k);
+      hdp_.remove_context(k);
+      hdp_.remove_group(k);
 
       // this is way inefficient and instead of relabeling states after every sample
       // we should probably just track which states are "active". This'll do for now.
@@ -377,7 +381,6 @@ void state::clear_empty_states() {
           if (states_[i][t] > static_cast<size_t>(k)) states_[i][t]--;
         }
       }
-      K--;
     }
   }
 }
