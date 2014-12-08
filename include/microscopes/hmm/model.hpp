@@ -61,14 +61,14 @@ namespace hmm{
     inline void get_sticks(float * f) { Eigen::Map<MatrixXf>(f, J, K+1)          = sticks_; }
     inline void get_dishes(float * f) { Eigen::Map<MatrixXf>(f, K, base_.size()) = dishes_; }
 
-    inline void set_alpha_hypers(float hyper_alpha_a, float hyper_alpha_b) {
-      hyper_alpha_a_ = hyper_alpha_a;
-      hyper_alpha_b_ = hyper_alpha_b;
+    inline void set_alpha_hypers(float a, float b) {
+      hyper_alpha_a_ = a;
+      hyper_alpha_b_ = b;
     }
 
-    inline void set_gamma_hypers(float hyper_gamma_a, float hyper_gamma_b) {
-      hyper_gamma_a_ = hyper_gamma_a;
-      hyper_gamma_b_ = hyper_gamma_b;
+    inline void set_gamma_hypers(float a, float b) {
+      hyper_gamma_a_ = a;
+      hyper_gamma_b_ = b;
     }
 
     inline void set_alpha(float alpha0) { alpha0_ = alpha0; }
@@ -82,8 +82,8 @@ namespace hmm{
     void assign(size_t data, size_t group, size_t context);
     void remove(size_t data, size_t group, size_t context);
 
-    void add_context(distributions::rng_t rng);
-    void add_group(distributions::rng_t rng);
+    void add_context(distributions::rng_t &rng);
+    void add_group(distributions::rng_t &rng);
 
     void remove_context(size_t context);
     void remove_group(size_t group);

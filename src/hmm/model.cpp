@@ -53,7 +53,7 @@ void direct_assignment::remove(size_t data, size_t group, size_t context) {
   dish_suffstats_(group, data)--;
 }
 
-void direct_assignment::add_context(distributions::rng_t rng) {
+void direct_assignment::add_context(distributions::rng_t &rng) {
   MICROSCOPES_DCHECK(sticks_.rows() == (long)J, 
     "Sticks Have Incorrect Number of Rows");
   MICROSCOPES_DCHECK(sticks_.cols() == (long)K+1, 
@@ -76,7 +76,7 @@ void direct_assignment::add_context(distributions::rng_t rng) {
   J++;
 }
 
-void direct_assignment::add_group(distributions::rng_t rng) {
+void direct_assignment::add_group(distributions::rng_t &rng) {
   MICROSCOPES_DCHECK(sticks_.rows() == (long)J,   
     "Sticks Have Incorrect Number of Rows");
   MICROSCOPES_DCHECK(sticks_.cols() == (long)K+1, 
