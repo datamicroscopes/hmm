@@ -66,21 +66,23 @@ namespace hmm{
     inline void set_alpha(float alpha0) { alpha0_ = alpha0; }
     inline void set_gamma(float gamma)  { gamma_  = gamma; }
 
-    float joint_log_likelihood(const std::vector<std::vector<size_t> > &data,
-                               const std::vector<std::vector<size_t> > &states);
-    void add_context(distributions::rngt_t rng);
-    void add_group(distributions::rng_t rng);
-    void clear_empty_states();
-    void sample_sticks(distributions::rng_t &rng);
-    void sample_dishes(distributions::rng_t &rng);
-    void sample_hypers(distributions::rng_t &rng, bool alpha_flag, bool gamma_flag, size_t niter);
-
-    void assign(size_t data, size_t group, size_t context);
-    void remove(size_t data, size_t group, size_t context);
     inline void clear() {
       stick_counts_   = MatrixXs::Zero(J,K);
       dish_suffstats_ = MatrixXs::Zero(K,base_.size());
     }
+
+    void assign(size_t data, size_t group, size_t context);
+    void remove(size_t data, size_t group, size_t context);
+
+    void add_context(distributions::rngt_t rng);
+    void add_group(distributions::rng_t rng);
+
+    float joint_log_likelihood(const std::vector<std::vector<size_t> > &data,
+                               const std::vector<std::vector<size_t> > &states);
+    void clear_empty_states();
+    void sample_hypers(distributions::rng_t &rng, bool alpha_flag, bool gamma_flag, size_t niter);
+    void sample_sticks(distributions::rng_t &rng);
+    void sample_dishes(distributions::rng_t &rng);
   protected:
     std::vector<float> beta_; // the stick lengths for the top-level DP draw. Size K+1.
 

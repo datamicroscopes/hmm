@@ -121,6 +121,114 @@ float direct_assignment::joint_log_likelihood() {
   return logp;
 }
 
+void direct_assignment::sample_hypers(distributions::rng_t &rng, bool alpha_flag, bool gamma_flag, size_t niter) {
+  // sample auxiliary variable
+  MatrixXs m_ = MatrixXs::Zero(K, K);
+  std::uniform_real_distribution<float> sampler (0.0, 1.0);
+  for (size_t i = 0; i < K; i++) {
+    for (size_t j = 0; j < K; j++) {
+      size_t n_ij = stick_counts_(i,j);
+      if (n_ij > 0) {
+        for (size_t l = 0; l < n_ij; l++) {
+          if (sampler(rng) < (alpha0_ * beta_[j]) / (alpha0_ * beta_[j] + l))
+          {
+            m_(i,j)++;
+          }
+        }
+      }
+    }
+  }
+
+  float alphas[K+1];
+  float new_beta[K+1];
+
+  MatrixXs m_sum = m_.colwise().sum();
+  for (size_t k = 0; k < K; k++) {
+    alphas[k] = m_sum(k);
+  }
+  alphas[K] = gamma_;
+
+  distributions::sample_dirichlet(rng, K+1, alphas, new_beta);
+  beta_.assign(new_beta, new_beta + K+1);
+
+  if (alpha_flag)
+    sample_alpha(rng, m_.sum(), niter);
+  if (gamma_flag)
+    sample_gamma(rng, m_.sum(), niter);
+}
+
+void direct_assignment::sample_sticks(distributions::rng_t &rng) {
+  max_stick = 0.0;
+  for (size_t k = 0; k < K; k++) {
+    sample_stick_row(rng, k);
+  }
+}
+
+void direct_assignment::sample_dishes(distributions::rng_t &rng) {
+  for (size_t k = 0; k < K; k++) {
+    sample_dish_row(rng, k);
+  }
+}
+
+void direct_assignment::sample_stick_row(distributions::rng_t &rng, size_t i) {
+    float new_stick[K+1];
+    float alphas[K+1];
+    for (size_t k = 0; k < K; k++) {
+      alphas[k] = stick_counts_(i,k) + alpha0_ * beta_[k];
+    }
+    alphas[K] = alpha0_ * beta_[K];
+    distributions::sample_dirichlet(rng, K+1, alphas, new_stick);
+    for (size_t k = 0; k < K+1; k++) {
+      sticks_(i,k) = new_stick[k];
+    }
+    max_stick = max_stick > new_stick[K] ? max_stick : new_stick[K];
+}
+
+void direct_assignment::sample_dish_row(distributions::rng_t &rng, size_t k) {
+  float new_dish[defn_.N()];
+  float alphas[defn_.N()];
+  for (size_t n = 0; n < defn_.N(); n++) {
+    alphas[n] = dish_suffstats_(k,n) + base_[n];
+  }
+  distributions::sample_dirichlet(rng, defn_.N(), alphas, new_dish);
+  for (size_t n = 0; n < defn_.N(); n++) {
+    dishes_(k,n) = new_dish[n];
+  }
+}
+
+void direct_assignment::sample_alpha(distributions::rng_t &rng, size_t m, size_t iter) {
+  for (size_t i = 0; i < iter; i++) {
+    float w = 0.0;
+    int s = 0;
+    float p;
+    MatrixXs stick_counts_sum = stick_counts_.rowwise().sum();
+    for (size_t k = 0; k < K; k++) {
+      w += distributions::fast_log(distributions::sample_beta(rng, alpha0_ + 1, stick_counts_sum(k,0)));
+      p = stick_counts_sum(k,0) / alpha0_;
+      p /= p + 1;
+      s += distributions::sample_bernoulli(rng, p);
+      //std::cout << "w[" << k << "]:" << w << ", p[" << k << "]" << p << std::endl;
+    }
+    alpha0_ = distributions::sample_gamma(rng, 
+      hyper_alpha_a_ + m - s,
+      1.0 / (hyper_alpha_b_ - w));
+  }
+}
+
+void direct_assignment::sample_gamma(distributions::rng_t &rng, size_t m, size_t iter) {
+  for (size_t i = 0; i < iter; i++) {
+    float mu = distributions::sample_beta(rng, gamma_ + 1, m);
+    float pi_mu = 1.0 / ( 1.0 + ( m * ( hyper_gamma_b_ - distributions::fast_log(mu) ) ) / ( hyper_gamma_a_ + K - 1 ) );
+    if (distributions::sample_bernoulli(rng, pi_mu)) {
+      gamma_ = distributions::sample_gamma(rng, hyper_gamma_a_ + K,
+        1.0 / (hyper_gamma_b_ - distributions::fast_log(mu)));
+    } else {
+      gamma_ = distributions::sample_gamma(rng, hyper_gamma_a_ + K + 1,
+        1.0 / (hyper_gamma_b_ - distributions::fast_log(mu)));
+    }
+  }
+}
+
 void state::sample_aux(distributions::rng_t &rng) {
   size_t prev_state;
   std::uniform_real_distribution<float> sampler (0.0, 1.0);
@@ -237,42 +345,6 @@ void state::sample_state(distributions::rng_t &rng) {
   }
 }
 
-void direct_assignment::sample_hypers(distributions::rng_t &rng, bool alpha_flag, bool gamma_flag, size_t niter) {
-  // sample auxiliary variable
-  MatrixXs m_ = MatrixXs::Zero(K, K);
-  std::uniform_real_distribution<float> sampler (0.0, 1.0);
-  for (size_t i = 0; i < K; i++) {
-    for (size_t j = 0; j < K; j++) {
-      size_t n_ij = stick_counts_(i,j);
-      if (n_ij > 0) {
-        for (size_t l = 0; l < n_ij; l++) {
-          if (sampler(rng) < (alpha0_ * beta_[j]) / (alpha0_ * beta_[j] + l))
-          {
-            m_(i,j)++;
-          }
-        }
-      }
-    }
-  }
-
-  float alphas[K+1];
-  float new_beta[K+1];
-
-  MatrixXs m_sum = m_.colwise().sum();
-  for (size_t k = 0; k < K; k++) {
-    alphas[k] = m_sum(k);
-  }
-  alphas[K] = gamma_;
-
-  distributions::sample_dirichlet(rng, K+1, alphas, new_beta);
-  beta_.assign(new_beta, new_beta + K+1);
-
-  if (alpha_flag)
-    sample_alpha(rng, m_.sum(), niter);
-  if (gamma_flag)
-    sample_gamma(rng, m_.sum(), niter);
-}
-
 // FIX ME
 void state::clear_empty_states() {
   for (ssize_t k = K-1; k >= 0; k--) {
@@ -299,77 +371,5 @@ void state::clear_empty_states() {
       }
       K--;
     }
-  }
-}
-
-void direct_assignment::sample_gamma(distributions::rng_t &rng, size_t m, size_t iter) {
-  for (size_t i = 0; i < iter; i++) {
-    float mu = distributions::sample_beta(rng, gamma_ + 1, m);
-    float pi_mu = 1.0 / ( 1.0 + ( m * ( hyper_gamma_b_ - distributions::fast_log(mu) ) ) / ( hyper_gamma_a_ + K - 1 ) );
-    if (distributions::sample_bernoulli(rng, pi_mu)) {
-      gamma_ = distributions::sample_gamma(rng, hyper_gamma_a_ + K,
-        1.0 / (hyper_gamma_b_ - distributions::fast_log(mu)));
-    } else {
-      gamma_ = distributions::sample_gamma(rng, hyper_gamma_a_ + K + 1,
-        1.0 / (hyper_gamma_b_ - distributions::fast_log(mu)));
-    }
-  }
-}
-
-void direct_assignment::sample_alpha(distributions::rng_t &rng, size_t m, size_t iter) {
-  for (size_t i = 0; i < iter; i++) {
-    float w = 0.0;
-    int s = 0;
-    float p;
-    MatrixXs stick_counts_sum = stick_counts_.rowwise().sum();
-    for (size_t k = 0; k < K; k++) {
-      w += distributions::fast_log(distributions::sample_beta(rng, alpha0_ + 1, stick_counts_sum(k,0)));
-      p = stick_counts_sum(k,0) / alpha0_;
-      p /= p + 1;
-      s += distributions::sample_bernoulli(rng, p);
-      //std::cout << "w[" << k << "]:" << w << ", p[" << k << "]" << p << std::endl;
-    }
-    alpha0_ = distributions::sample_gamma(rng, 
-      hyper_alpha_a_ + m - s,
-      1.0 / (hyper_alpha_b_ - w));
-  }
-}
-
-void direct_assignment::sample_sticks(distributions::rng_t &rng) {
-  max_stick = 0.0;
-  for (size_t k = 0; k < K; k++) {
-    sample_stick_row(rng, k);
-  }
-}
-
-void direct_assignment::sample_stick_row(distributions::rng_t &rng, size_t i) {
-    float new_stick[K+1];
-    float alphas[K+1];
-    for (size_t k = 0; k < K; k++) {
-      alphas[k] = stick_counts_(i,k) + alpha0_ * beta_[k];
-    }
-    alphas[K] = alpha0_ * beta_[K];
-    distributions::sample_dirichlet(rng, K+1, alphas, new_stick);
-    for (size_t k = 0; k < K+1; k++) {
-      sticks_(i,k) = new_stick[k];
-    }
-    max_stick = max_stick > new_stick[K] ? max_stick : new_stick[K];
-}
-
-void direct_assignment::sample_dishes(distributions::rng_t &rng) {
-  for (size_t k = 0; k < K; k++) {
-    sample_dish_row(rng, k);
-  }
-}
-
-void direct_assignment::sample_dish_row(distributions::rng_t &rng, size_t k) {
-  float new_dish[defn_.N()];
-  float alphas[defn_.N()];
-  for (size_t n = 0; n < defn_.N(); n++) {
-    alphas[n] = dish_suffstats_(k,n) + base_[n];
-  }
-  distributions::sample_dirichlet(rng, defn_.N(), alphas, new_dish);
-  for (size_t n = 0; n < defn_.N(); n++) {
-    dishes_(k,n) = new_dish[n];
   }
 }
