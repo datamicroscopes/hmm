@@ -3,9 +3,9 @@
 using namespace microscopes::hmm;
 
 // IMPLEMENT
-direct_assignment(const model_definition &defn,
-                  const std::vector<float> &base,
-                  distributions::rng_t &rng) {}
+direct_assignment::direct_assignment(const model_definition &defn,
+                                     const std::vector<float> &base,
+                                     distributions::rng_t &rng) {}
 
 void direct_assignment::assign(size_t data, size_t group, size_t context) {
   MICROSCOPES_DCHECK(data < base_.size(), "Data is out of range");
@@ -93,14 +93,14 @@ void direct_assignment::add_group(distributions::rng_t rng) {
   K++;
 }
 
-void remove_context(size_t context) {
+void direct_assignment::remove_context(size_t context) {
   MICROSCOPES_DCHECK(context < J, "Cannot remove context out of range");
   common::util::remove_row<float>(sticks_, context);
   common::util::remove_row<size_t>(stick_counts_, context);
   J--;
 }
 
-void remove_group(size_t group) {
+void direct_assignment::remove_group(size_t group) {
   MICROSCOPES_DCHECK(group < K, "Cannot remove group out of range");
 
   beta_[K] += beta_[group];
