@@ -11,9 +11,9 @@ void direct_assignment::assign(size_t data, size_t group, size_t context) {
   MICROSCOPES_DCHECK(data < base_.size(), "Data is out of range");
   MICROSCOPES_DCHECK(group < K, "Group is out of range");
   MICROSCOPES_DCHECK(context < J, "Context is out of range");
-  
-  stick_counts_()++;
-  dish_suffstats_()++;
+
+  stick_counts_(context, group)++;
+  dish_suffstats_(group, data)++;
 }
 
 void direct::assignment::remove(size_t data, size_t group, size_t context) {
