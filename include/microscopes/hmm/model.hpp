@@ -61,16 +61,6 @@ namespace hmm{
     inline void get_sticks(float * f) { Eigen::Map<MatrixXf>(f, J, K+1)          = sticks_; }
     inline void get_dishes(float * f) { Eigen::Map<MatrixXf>(f, K, base_.size()) = dishes_; }
 
-    inline void set_alpha_hypers(float a, float b) {
-      hyper_alpha_a_ = a;
-      hyper_alpha_b_ = b;
-    }
-
-    inline void set_gamma_hypers(float a, float b) {
-      hyper_gamma_a_ = a;
-      hyper_gamma_b_ = b;
-    }
-
     inline void set_alpha(float alpha0) { alpha0_ = alpha0; }
     inline void set_gamma(float gamma)  { gamma_  = gamma; }
 
@@ -123,10 +113,6 @@ namespace hmm{
     // Will generalize this to other observation models later.
     const std::vector<float> base_; 
 
-    // parameters for a gamma hyperprior on gamma_ and alpha0_
-    float hyper_gamma_a_, hyper_gamma_b_,
-          hyper_alpha_a_, hyper_alpha_b_;
-
     size_t K, J; // The number of states currently instantiated, and number of contexts, respectively
     // Note, for the HDP-HMM these numbers should always be equal
 
@@ -142,10 +128,6 @@ namespace hmm{
   class state {
   public:
     state(const model_definition &defn,
-          const float gamma_a,
-          const float gamma_b,
-          const float alpha_a,
-          const float alpha_b,
           const std::vector<float> &base,
           const std::vector<std::vector<size_t> > &data,
           distributions::rng_t &rng,
@@ -158,8 +140,6 @@ namespace hmm{
     inline float alpha()           { return hdp_.alpha(); }
     inline float gamma()           { return hdp_.gamma(); }
 
-    inline void set_alpha_hypers(float a, float b) { hdp_.set_alpha_hypers(a, b); }
-    inline void set_gamma_hypers(float a, float b) { hdp_.set_gamma_hypers(a, b); }
     inline void set_alpha(float alpha0) { hdp_.set_alpha(alpha0); }
     inline void set_gamma(float gamma)  { hdp_.set_gamma(gamma); }
 

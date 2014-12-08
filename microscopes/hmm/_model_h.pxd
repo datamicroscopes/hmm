@@ -30,9 +30,6 @@ cdef extern from "microscopes/hmm/model.hpp" namespace "microscopes::hmm":
     void get_sticks(float *)
     void get_dishes(float *)
 
-    void set_alpha_hypers(float, float)
-    void set_gamma_hypers(float, float)
-
     void set_alpha(float)
     void set_gamma(float)
 
@@ -69,8 +66,6 @@ cdef extern from "microscopes/hmm/model.hpp" namespace "microscopes::hmm":
     float alpha()
     float gamma()
 
-    void set_alpha_hypers(float, float)
-    void set_gamma_hypers(float, float)
     void set_alpha(float)
     void set_gamma(float)
 

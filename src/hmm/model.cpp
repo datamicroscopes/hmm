@@ -2,11 +2,7 @@
 
 using namespace microscopes::hmm;
 
-direct_assignment::direct_assignment(const float gamma_a,
-                                     const float gamma_b,
-                                     const float alpha_a,
-                                     const float alpha_b,
-                                     const std::vector<float> &base,
+direct_assignment::direct_assignment(const std::vector<float> &base,
                                      distributions::rng_t &rng,
                                      const size_t init_groups=1,
                                      const size_t init_contexts=1) :
@@ -18,10 +14,6 @@ dish_suffstats_(MatrixXs::Zero(init_groups, base.size())),
 gamma_(distributions::sample_gamma(rng, gamma_a, 1.0 / gamma_b)), 
 alpha0_(distributions::sample_gamma(rng, alpha_a, 1.0 / alpha_b)),
 base_(base),
-hyper_gamma_a_(gamma_a),
-hyper_gamma_b_(gamma_b),
-hyper_alpha_a_(alpha_a),
-hyper_alpha_b_(alpha_b),
 K(init_groups),
 J(init_contexts)
 {
@@ -257,7 +249,7 @@ void direct_assignment::sample_dish_row(distributions::rng_t &rng, size_t k) {
   }
 }
 
-void direct_assignment::sample_alpha(distributions::rng_t &rng, size_t m, size_t iter) {
+void direct_assignment::sample_alpha(distributions::rng_t &rng, float hyper_a, float hyper_b, size_t m, size_t iter) {
   for (size_t i = 0; i < iter; i++) {
     float w = 0.0;
     int s = 0;
@@ -271,30 +263,26 @@ void direct_assignment::sample_alpha(distributions::rng_t &rng, size_t m, size_t
       //std::cout << "w[" << k << "]:" << w << ", p[" << k << "]" << p << std::endl;
     }
     alpha0_ = distributions::sample_gamma(rng, 
-      hyper_alpha_a_ + m - s,
-      1.0 / (hyper_alpha_b_ - w));
+      hyper_a + m - s,
+      1.0 / (hyper_b - w));
   }
 }
 
-void direct_assignment::sample_gamma(distributions::rng_t &rng, size_t m, size_t iter) {
+void direct_assignment::sample_gamma(distributions::rng_t &rng, float hyper_a, float hyper_b, size_t m, size_t iter) {
   for (size_t i = 0; i < iter; i++) {
     float mu = distributions::sample_beta(rng, gamma_ + 1, m);
-    float pi_mu = 1.0 / ( 1.0 + ( m * ( hyper_gamma_b_ - distributions::fast_log(mu) ) ) / ( hyper_gamma_a_ + K - 1 ) );
+    float pi_mu = 1.0 / ( 1.0 + ( m * ( hyper_b - distributions::fast_log(mu) ) ) / ( hyper_a + K - 1 ) );
     if (distributions::sample_bernoulli(rng, pi_mu)) {
-      gamma_ = distributions::sample_gamma(rng, hyper_gamma_a_ + K,
-        1.0 / (hyper_gamma_b_ - distributions::fast_log(mu)));
+      gamma_ = distributions::sample_gamma(rng, hyper_a + K,
+        1.0 / (hyper_b - distributions::fast_log(mu)));
     } else {
-      gamma_ = distributions::sample_gamma(rng, hyper_gamma_a_ + K + 1,
-        1.0 / (hyper_gamma_b_ - distributions::fast_log(mu)));
+      gamma_ = distributions::sample_gamma(rng, hyper_a + K + 1,
+        1.0 / (hyper_b - distributions::fast_log(mu)));
     }
   }
 }
 
 state::state(const model_definition &defn,
-             const float gamma_a,
-             const float gamma_b,
-             const float alpha_a,
-             const float alpha_b,
              const std::vector<float> &base,
              const std::vector<std::vector<size_t> > &data,
              distributions::rng_t &rng,
@@ -303,7 +291,7 @@ defn_(defn),
 data_(data),
 states_(data.size()),
 aux_(data.size()),
-hdp_(gamma_a, gamma_b, alpha_a, alpha_b, base, rng, init_states, init_states),
+hdp_(base, rng, init_states, init_states),
 state_visited_(init_states)
 {
   MICROSCOPES_DCHECK(base.size() == defn_.N(), "Number of hyperparameters must match vocabulary size.");
