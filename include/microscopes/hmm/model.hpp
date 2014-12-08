@@ -77,9 +77,11 @@ namespace hmm{
     void add_context(distributions::rngt_t rng);
     void add_group(distributions::rng_t rng);
 
-    float joint_log_likelihood(const std::vector<std::vector<size_t> > &data,
-                               const std::vector<std::vector<size_t> > &states);
-    void clear_empty_states();
+    void remove_context(size_t context);
+    void remove_group(size_t group);
+
+    float joint_log_likelihood();
+
     void sample_hypers(distributions::rng_t &rng, bool alpha_flag, bool gamma_flag, size_t niter);
     void sample_sticks(distributions::rng_t &rng);
     void sample_dishes(distributions::rng_t &rng);

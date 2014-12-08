@@ -93,6 +93,14 @@ void direct_assignment::add_group(distributions::rng_t rng) {
   K++;
 }
 
+void remove_context(size_t context) {
+
+}
+
+void remove_group(size_t group) {
+  
+}
+
 float direct_assignment::joint_log_likelihood() {
   float logp = 0.0;
   for (size_t k = 0; k < K; k++) {
