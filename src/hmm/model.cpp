@@ -7,12 +7,26 @@ direct_assignment(const model_definition &defn,
                   const std::vector<float> &base,
                   distributions::rng_t &rng) {}
 
-// IMPLEMENT
 void direct_assignment::assign(size_t data, size_t group, size_t context) {
+  MICROSCOPES_DCHECK(data < base_.size(), "Data is out of range");
+  MICROSCOPES_DCHECK(group < K, "Group is out of range");
+  MICROSCOPES_DCHECK(context < J, "Context is out of range");
+  
+  stick_counts_()++;
+  dish_suffstats_()++;
 }
 
-// IMPLEMENT
-void direct::assignment::remove(size_t data, size_t group, size_t context) {}
+void direct::assignment::remove(size_t data, size_t group, size_t context) {
+  MICROSCOPES_DCHECK(data < base_.size(), "Data is out of range");
+  MICROSCOPES_DCHECK(group < K, "Group is out of range");
+  MICROSCOPES_DCHECK(context < J, "Context is out of range");
+
+  MICROSCOPES_DCHECK(stick_counts_(context, group) > 0, "Cannot remove count from group");
+  stick_counts_(context, group)--;
+
+  MICROSCOPES_DCHECK(dish_suffstats_(group, data) > 0, "Cannot remove count from sufficient statistics");
+  dish_suffstats_(group, data)--;
+}
 
 void direct_assignment::add_context(distributions::rng_t rng) {
   MICROSCOPES_DCHECK(sticks_.rows() == J, "Sticks Have Incorrect Number of Rows");
@@ -171,9 +185,8 @@ state::state(const model_definition &defn,
   sample_phi(rng);
 }
 
-// FIX ME
 void state::sample_state(distributions::rng_t &rng) {
-  hdp_.clear();
+  hdp_.clear(); // clear counts
   size_t K = nstates();
   state_visited_ = std::vector<bool>(K);
   for (size_t i = 0; i < data_.size(); i++) {
@@ -209,7 +222,6 @@ void state::sample_state(distributions::rng_t &rng) {
     mapl = probs.row(data_[i].size()-1);
     states_[i][data_[i].size()-1] = distributions::sample_from_likelihoods(rng, likelihoods);
     state_visited_[states_[i][data_[i].size()-1]] = true;
-    //phi_counts_(states_[i][data_[i].size()-1],data_[i][data_[i].size()-1])++;
     for (int t = data_[i].size()-1; t > 0; t--) {
       for (size_t k = 0; k < K; k++) {
         if (aux_[i][t] >= hdp_.stick(states_[i][t],k)) {
@@ -218,16 +230,10 @@ void state::sample_state(distributions::rng_t &rng) {
       }
       mapl = probs.row(t-1);
       states_[i][t-1] = distributions::sample_from_likelihoods(rng, likelihoods);
-      // Update counts
       state_visited_[states_[i][t-1]] = true;
-      //phi_counts_(states_[i][t], data_[i][t])++;
-      //pi_counts_(states_[i][t-1], states_[i][t])++;
-      //phi_counts_(states_[i][t-1], data_[i][t-1])++;
-      hdp_.assign(data_[i][t], states_[i][t], states_[i][t-1]);
+      hdp_.assign(data_[i][t], states_[i][t], states_[i][t-1]); // Update counts
     }
     hdp_.assign(data_[i][0], states_[i][0], 0);
-    // phi_counts_(states_[i][0], data_[i][0])++;
-    // pi_counts_(0, states_[i][0])++; // Also add count for state 0, which is the initial state
   }
 }
 
@@ -267,6 +273,7 @@ void direct_assignment::sample_hypers(distributions::rng_t &rng, bool alpha_flag
     sample_gamma(rng, m_.sum(), niter);
 }
 
+// FIX ME
 void state::clear_empty_states() {
   for (ssize_t k = K-1; k >= 0; k--) {
     if (!state_visited_[k]) {
