@@ -40,8 +40,14 @@ namespace hmm{
   class direct_assignment {
   public:
     direct_assignment(const model_definition &defn,
+                      const float gamma_a,
+                      const float gamma_b,
+                      const float alpha_a,
+                      const float alpha_b,
                       const std::vector<float> &base,
-                      distributions::rng_t &rng);
+                      distributions::rng_t &rng,
+                      const size_t init_groups,
+                      const size_t init_contexts);
 
     inline float stick(size_t group, size_t context) { return sticks_(context, group); }
     // For general obseration models, should replace this with the score of the data under that dish
@@ -134,9 +140,14 @@ namespace hmm{
   class state {
   public:
     state(const model_definition &defn,
+          const float gamma_a,
+          const float gamma_b,
+          const float alpha_a,
+          const float alpha_b,
           const std::vector<float> &base,
           const std::vector<std::vector<size_t> > &data,
-          distributions::rng_t &rng);
+          distributions::rng_t &rng,
+          const size_t init_states);
 
     inline void get_pi(float * f)  { Eigen::Map<MatrixXf>(f, K, K+1)       = pi_; }
     inline void get_phi(float * f) { Eigen::Map<MatrixXf>(f, K, defn_.N()) = phi_; }

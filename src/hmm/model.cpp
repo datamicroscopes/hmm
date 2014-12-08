@@ -2,10 +2,35 @@
 
 using namespace microscopes::hmm;
 
-// IMPLEMENT
 direct_assignment::direct_assignment(const model_definition &defn,
+                                     const float gamma_a,
+                                     const float gamma_b,
+                                     const float alpha_a,
+                                     const float alpha_b,
                                      const std::vector<float> &base,
-                                     distributions::rng_t &rng) {}
+                                     distributions::rng_t &rng,
+                                     const size_t init_groups=1,
+                                     const size_t init_contexts=1) :
+beta_(init_groups+1),
+sticks_(init_contexts, init_groups + 1),
+stick_counts_(MatrixXs::Zero(init_contexts, init_groups)),
+dishes_(init_groups, base.size()),
+dish_suffstats_(MatrixXs::Zero(init_groups, base.size())),
+gamma_(distributions::sample_gamma(rng, gamma_a, 1.0 / gamma_b)), 
+alpha0_(distributions::sample_gamma(rng, alpha_a, 1.0 / alpha_b)),
+base_(base),
+hyper_gamma_a_(gamma_a),
+hyper_gamma_b_(gamma_b),
+hyper_alpha_a_(alpha_a),
+hyper_alpha_b_(alpha_b),
+K(init_states),
+J(init_contexts)
+{
+  MICROSCOPES_DCHECK(base.size() == defn.N(), "Number of hyperparameters must match vocabulary size.");
+  for (size_t i = 0; i <= init_groups; i++) { // simple initialization 
+    beta_[i] = 1.0 / beta_.size();
+  }
+}
 
 void direct_assignment::assign(size_t data, size_t group, size_t context) {
   MICROSCOPES_DCHECK(data < base_.size(), "Data is out of range");
@@ -277,43 +302,38 @@ void state::sample_aux(distributions::rng_t &rng) {
 
 // FIX ME
 state::state(const model_definition &defn,
-      const std::vector<float> &H,
-      const std::vector<std::vector<size_t> > &data,
-      distributions::rng_t &rng):
-  defn_(defn),
-  data_(data),
-  states_(data.size()),
-  aux_(data.size()),
-  pi_counts_(MatrixXs::Zero(1,1)),
-  pi_(1,2),
-  phi_counts_(MatrixXs::Zero(1,H.size())),
-  phi_(1,H.size()),
-  beta_(2),
-  state_visited_(1),
-  H_(H),
-  gamma_flag_(true),
-  alpha0_flag_(true),
-  K(1)
+             const float gamma_a,
+             const float gamma_b,
+             const float alpha_a,
+             const float alpha_b,
+             const std::vector<float> &base,
+             const std::vector<std::vector<size_t> > &data,
+             distributions::rng_t &rng,
+             const size_t init_states=1):
+defn_(defn),
+data_(data),
+states_(data.size()),
+aux_(data.size()),
+hdp_(defn, gamma_a, gamma_b, alpha_a, alpha_b, base, rng, init_states, init_states),
+state_visited_(init_states),
+H_(H),
 {
-  MICROSCOPES_DCHECK(H.size() == defn_.N(), "Number of hyperparameters must match vocabulary size.");
-  // sample hyperparameters from prior
-  if (gamma_flag_)  
-    gamma_  = distributions::sample_gamma(rng, hyper_gamma_a_, 1.0 / hyper_gamma_b_); 
-  if (alpha0_flag_) 
-    alpha0_ = distributions::sample_gamma(rng, hyper_alpha_a_, 1.0 / hyper_alpha_b_);
-  beta_[0] = 0.5;
-  beta_[1] = 0.5; // simple initialization
+  MICROSCOPES_DCHECK(base.size() == defn_.N(), "Number of hyperparameters must match vocabulary size.");
   state_visited_[0] = true;
   for (size_t i = 0; i < data_.size(); i++) {
     states_[i] = std::vector<size_t>(data_[i].size());
     aux_[i] = std::vector<float>(data_[i].size());
-    pi_counts_(0,0) += data_[i].size();
+    size_t prev_state = 0;
     for (size_t j = 0; j < data_[i].size(); j++) {
-      phi_counts_(0,data_[i][j])++;
+      size_t next_state = distributions::sample_int(rng, 0, init_states-1);
+      states_[i][j] = next_state;
+      state_visited_[next_state] = true;
+      hdp_.assign(data_[i][j], next_state, prev_state);
+      prev_state = next_state;
     }
   }
-  sample_pi(rng);
-  sample_phi(rng);
+  hdp_.sample_sticks(rng);
+  hdp_.sample_dishes(rng);
 }
 
 void state::sample_state(distributions::rng_t &rng) {
