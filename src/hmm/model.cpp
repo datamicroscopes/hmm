@@ -130,6 +130,7 @@ void state::sample_aux(distributions::rng_t &rng) {
   }
 }
 
+// FIX ME
 state::state(const model_definition &defn,
       const std::vector<float> &H,
       const std::vector<std::vector<size_t> > &data,
@@ -170,8 +171,10 @@ state::state(const model_definition &defn,
   sample_phi(rng);
 }
 
+// FIX ME
 void state::sample_state(distributions::rng_t &rng) {
   hdp_.clear();
+  size_t K = nstates();
   state_visited_ = std::vector<bool>(K);
   for (size_t i = 0; i < data_.size(); i++) {
     // Forward-filter
@@ -180,16 +183,17 @@ void state::sample_state(distributions::rng_t &rng) {
       float total_prob = 0.0;
       for (size_t k = 0; k < K; k++) {
         if (t == 0) {
-          probs(t,k) = phi_(k,data_[i][t]) * (aux_[i][t] <= pi_(0,k) ? 1.0 : 0.0);
+          probs(t,k) = hdp_.dish(data_[i][t],k)
+            * (aux_[i][t] <= hdp_.stick(k,0) ? 1.0 : 0.0);
         }
         else {
           probs(t,k) = 0.0;
           for (size_t l = 0; l < K; l++) {
-            if (aux_[i][t] <= pi_(l,k)) {
+            if (aux_[i][t] <= hdp_.stick(k,l)) {
               probs(t,k) += probs(t-1,l);
             }
           }
-          probs(t,k) *= phi_(k,data_[i][t]);
+          probs(t,k) *= hdp_.dish(data_[i][t],k);
         }
         total_prob += probs(t,k);
       }
@@ -197,14 +201,6 @@ void state::sample_state(distributions::rng_t &rng) {
       for (size_t k = 0; k < K; k++) { // normalize to prevent numerical underflow
         probs(t,k) /= total_prob;
       }
-      // if (verbose) {
-      //   std::cout << "Forward " << t << ": [";
-      //   for (size_t k = 0; k < K; k++) {
-      //     std::cout << probs(t,k);
-      //     if (k < K-1) std::cout << ", ";
-      //   }
-      //   std::cout << "]" << std::endl;
-      // }
     }
 
     // Backwards-sample
@@ -213,23 +209,25 @@ void state::sample_state(distributions::rng_t &rng) {
     mapl = probs.row(data_[i].size()-1);
     states_[i][data_[i].size()-1] = distributions::sample_from_likelihoods(rng, likelihoods);
     state_visited_[states_[i][data_[i].size()-1]] = true;
-    phi_counts_(states_[i][data_[i].size()-1],data_[i][data_[i].size()-1])++;
+    //phi_counts_(states_[i][data_[i].size()-1],data_[i][data_[i].size()-1])++;
     for (int t = data_[i].size()-1; t > 0; t--) {
       for (size_t k = 0; k < K; k++) {
-        // if (verbose) std::cout << "u: " << aux_[i][t] << ", pi: " << pi_(k,states_[i][t]) << std::endl;
-        if (aux_[i][t] >= pi_(k,states_[i][t])) {
+        if (aux_[i][t] >= hdp_.stick(states_[i][t],k)) {
           probs(t-1,k) = 0;
         }
       }
       mapl = probs.row(t-1);
-      // if (verbose) std::cout << "Backward " << t-1 << ": " << likelihoods << std::endl;
       states_[i][t-1] = distributions::sample_from_likelihoods(rng, likelihoods);
       // Update counts
       state_visited_[states_[i][t-1]] = true;
-      pi_counts_(states_[i][t-1], states_[i][t])++;
-      phi_counts_(states_[i][t-1], data_[i][t-1])++;
+      //phi_counts_(states_[i][t], data_[i][t])++;
+      //pi_counts_(states_[i][t-1], states_[i][t])++;
+      //phi_counts_(states_[i][t-1], data_[i][t-1])++;
+      hdp_.assign(data_[i][t], states_[i][t], states_[i][t-1]);
     }
-    pi_counts_(0, states_[i][0])++; // Also add count for state 0, which is the initial state
+    hdp_.assign(data_[i][0], states_[i][0], 0);
+    // phi_counts_(states_[i][0], data_[i][0])++;
+    // pi_counts_(0, states_[i][0])++; // Also add count for state 0, which is the initial state
   }
 }
 

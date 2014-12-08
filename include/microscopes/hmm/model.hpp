@@ -45,11 +45,11 @@ namespace hmm{
 
     inline float stick(size_t group, size_t context) { return sticks_(context, group); }
     // For general obseration models, should replace this with the score of the data under that dish
-    inline float dish(size_t data, size_t context)   { return dishes_(context, data); }
+    inline float dish(size_t data, size_t group)   { return dishes_(group, data); }
 
     inline float alpha() { return alpha0_; }
     inline float gamma() { return gamma_; }
-    inline size_t nsticks()   { return K; }
+    inline size_t ngroups()   { return K; }
     inline size_t ncontexts() { return J; }
     inline float max_stick() { return max_stick; }
 
@@ -136,7 +136,7 @@ namespace hmm{
 
     inline void get_pi(float * f)  { Eigen::Map<MatrixXf>(f, K, K+1)       = pi_; }
     inline void get_phi(float * f) { Eigen::Map<MatrixXf>(f, K, defn_.N()) = phi_; }
-    inline size_t nstates()        { return hdp_.nsticks(); }
+    inline size_t nstates()        { return hdp_.ngroups(); }
     inline size_t nobs()           { return defn_.N(); }
     inline float alpha()           { return hdp_.alpha(); }
     inline float gamma()           { return hdp_.gamma(); }
